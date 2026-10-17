@@ -1,0 +1,18 @@
+# Generated data audit and patient split manifests
+audit/
+splits/
+
+# Model weights
+*.pt
+*.pth
+*.ckpt
+
+# Runtime outputs
+runs/
+gpu_check_*.out
+gpu_check_*.err
+slurm-*.out
+
+# Python cache
+__pycache__/
+*.pyc
