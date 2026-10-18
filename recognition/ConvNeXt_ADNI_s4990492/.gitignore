@@ -16,3 +16,5 @@ slurm-*.out
 # Python cache
 __pycache__/
 *.pyc
+smoke_test_*.out
+smoke_test_*.err
