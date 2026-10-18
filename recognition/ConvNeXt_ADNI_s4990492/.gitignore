@@ -20,3 +20,5 @@ smoke_test_*.out
 smoke_test_*.err
 baseline_bench_*.out
 baseline_bench_*.err
+overfit_check_*.out
+overfit_check_*.err
