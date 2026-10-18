@@ -22,3 +22,5 @@ baseline_bench_*.out
 baseline_bench_*.err
 overfit_check_*.out
 overfit_check_*.err
+train_baseline_*.out
+train_baseline_*.err
