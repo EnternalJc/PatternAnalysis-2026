@@ -1,27 +1,112 @@
 # ADNI Classification with ConvNeXt
 
 ## Project status
-Planning and data audit. No training results are available yet.
 
-## Objective
-Classify Alzheimer's disease (AD) versus cognitively normal (CN)
-MRI images, and investigate whether prediction confidence reflects
-correctness.
+Updated 20 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tiny have completed three-epoch pilot runs on Rangpur. Results below are slice-level validation results reported by the student from cluster logs, not final test results. The replacement patient-level split awaits tutor confirmation. Check-off completion has not yet been recorded here.
 
-## Proposed approach
-- Main model: ConvNeXt (Hard difficulty).
-- Baseline: a simple convolutional neural network.
-- Dataset: the course-provided ADNI dataset on Rangpur.
-- Verify patient-level separation before training.
-- Compare classification performance, confidence, and computational cost.
+## Objective and model principles
 
-## Next steps
-- Audit image labels and patient identifiers.
-- Check for patient overlap between the provided train and test sets.
-- Establish a patient-separated validation set.
-- Run a small baseline experiment.
-- Prepare the one-page feasibility review for the tutor consultation.
+Classify Alzheimer's disease (AD) versus normal control (NC, called CN in the assignment) MRI slices, and investigate whether prediction confidence can identify errors for human review. Compare classification performance, confidence reliability and computational cost.
+
+The baseline uses three convolution/ReLU/pooling blocks, global average pooling and a two-class linear head (23,426 parameters). ConvNeXt-Tiny uses depthwise spatial convolution, LayerNorm, channel expansion/projection, GELU and residual connections. Stage depths are [3, 3, 9, 3] and widths [96, 192, 384, 768]. The implementation adapts the input to one grayscale channel and the output to two classes (27,818,594 parameters). No pretrained weights or stochastic depth are currently used. Architecture source: [Liu et al., A ConvNet for the 2020s, CVPR 2022](https://arxiv.org/abs/2201.03545) and [author implementation](https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py).
+
+## Data audit and preprocessing
+
+Course data: `/home/groups/comp3710/ADNI/AD_NC`, with `meta_data_with_label.json` in the parent directory. The audit matched all 30,520 images to metadata and identified 680 subjects: 221 AD and 459 NC, with no subjects assigned to both classes in this collection. Original JSON labels AD=2 and NC=0 are mapped to model targets AD=1 and NC=0.
+
+The supplied training/test directories share 216 subjects despite having no common scan IDs. A provisional class-stratified split groups all scans and slices from a subject together, using seed 42:
+
+| Split | Subjects | Scans | Images |
+|---|---:|---:|---:|
+| Training | 475 | 1,068 | 21,360 |
+| Validation | 101 | 229 | 4,580 |
+| Test | 104 | 229 | 4,580 |
+
+Subject overlap is zero. Source images are not moved. The loader converts images to grayscale float32 tensors in [0,1], retaining dimensions; sampled inputs were [1,240,256], and both pilot runs completed with batching at this size. No augmentation is currently implemented. Different numbers of scans per subject remain an evaluation/weighting consideration. The test split has not been used for model selection or performance evaluation.
+
+## Environment and usage
+
+Reported working environment: Python 3.11.15, PyTorch 2.13.0+cu130, torchvision 0.28.0+cu130, Pillow 12.3.0, NVIDIA A100-PCIE-40GB, compute-node driver 590.48.01. A complete environment export remains to be added. Fixed seeds support repeatability but do not guarantee bitwise reproducibility across hardware/software.
+
+On Rangpur, activate the existing environment:
+
+```bash
+source "$HOME/miniconda3/bin/activate"
+conda activate torch
+cd "$HOME/comp3710_adni_project"
+```
+
+For a fresh working directory with these source files, generate local manifests:
+
+```bash
+python audit_data.py
+python make_splits.py
+```
+
+`make_splits.py` refuses to overwrite an existing `splits/` directory. Reuse the established split rather than repeatedly changing it. Paths in generated manifests point to Rangpur data and are not portable to a local machine without those data.
+
+Submit training through Slurm:
+
+```bash
+sbatch train_baseline.sh
+sbatch train_convnext.sh
+squeue --me
+```
+
+The scripts run `train.py --epochs 3 --batch-size 8` and `train.py --model convnext --epochs 3 --batch-size 8`, respectively. They currently change to `$HOME/comp3710_adni_project`; adjust that line if running elsewhere. Explicit memory requests were omitted because this partition reports only 1 MB per node to Slurm; this is a site-specific configuration, not physical memory capacity.
+
+Read logs using the actual job ID:
+
+```bash
+cat train_baseline_JOBID.out
+cat train_baseline_JOBID.err
+cat train_convnext_JOBID.out
+cat train_convnext_JOBID.err
+```
+
+Each run creates `runs/<model>_<timestamp>/config.json`, `training_log.csv` and `best_<model>.pth`. Checkpoints are selected by lowest validation loss. Datasets, manifests, weights and raw runtime outputs are excluded by the project `.gitignore`; generated outputs are not part of the public submission.
+
+## Preliminary results
+
+Both pilots used batch size 8, seed 42 and the same train/validation manifests and preprocessing. Baseline: Adam, learning rate 1e-3, no weight decay. ConvNeXt: AdamW, learning rate 1e-4, weight decay 0.05. Optimizer differences mean this is not an isolated architecture comparison.
+
+| Model | Epoch | Train accuracy | Validation accuracy | Validation loss |
+|---|---:|---:|---:|---:|
+| SimpleCNN | 1 | 53.0% | 60.4% | 0.6633 |
+| SimpleCNN | 2 | 59.0% | 62.8% | 0.6394 |
+| SimpleCNN | 3 | 61.8% | 66.6% | 0.6136 |
+| ConvNeXt-Tiny | 1 | 52.3% | 58.4% | 0.6733 |
+| ConvNeXt-Tiny | 2 | 63.5% | 53.2% | 0.7440 |
+| ConvNeXt-Tiny | 3 | 72.5% | 54.7% | 0.8257 |
+
+Baseline epoch 3 AD/NC recall: 75.2%/57.9%. ConvNeXt best-validation-loss epoch 1 AD/NC recall: 57.6%/59.2%. ConvNeXt's increasing validation loss despite improving training accuracy suggests overfitting or optimization instability; the cause has not been established.
+
+| Model | Train + validation time/epoch | Peak PyTorch-allocated GPU memory |
+|---|---:|---:|
+| SimpleCNN | 29.3-35.0 s | 124.2 MiB |
+| ConvNeXt-Tiny | 132.2-136.8 s | 1,405.7 MiB |
+
+Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; ConvNeXt checkpoint reload remains to be checked.
+
+Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot job: `675518`; its exact run-directory identifier should be added from the cluster log. Training curves and a shareable aggregate metrics artifact remain to be added.
+
+## Feasibility review
+
+The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/ื๗าต/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The replacement split and evaluation unit for the course's 0.80 test-accuracy target are pending confirmation.
+
+## Remaining work
+
+- Confirm check-off status and data/evaluation decisions with the tutor.
+- Investigate ConvNeXt validation degradation using controlled validation-based experiments.
+- Add required `predict.py` and documented checkpoint-loading examples.
+- Add precision, recall, macro-F1, AUROC, patient-level aggregation and held-out evaluation after model selection.
+- Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
+- Add training plots, feasibility-review content, complete environment details and final engineering recommendation.
+- Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
 
 ## Artificial Intelligence Usage Disclosure
-ChatGPT assisted with initial project planning and drafting this outline.
-Implementation and experimental verification have not yet started.
+
+ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
+
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+
