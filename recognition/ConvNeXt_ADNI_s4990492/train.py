@@ -12,7 +12,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from dataset import ADNISliceDataset
-from modules import SimpleCNN
+from modules import SimpleCNN, ConvNeXtTiny
 
 
 def run_epoch(model, loader, criterion, device, optimizer=None):
@@ -73,6 +73,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument(
+        "--model",
+        choices=["baseline", "convnext"],
+        default="baseline",
+    )
     args = parser.parse_args()
 
     if args.epochs < 1 or args.batch_size < 1:
@@ -109,20 +114,42 @@ def main():
     )
 
     device = torch.device("cuda")
-    model = SimpleCNN().to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    if args.model == "baseline":
+        model = SimpleCNN().to(device)
+        learning_rate = 1e-3
+        weight_decay = 0.0
+        optimizer_name = "Adam"
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
+    else:
+        model = ConvNeXtTiny().to(device)
+        learning_rate = 1e-4
+        weight_decay = 0.05
+        optimizer_name = "AdamW"
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
 
-    run_dir = base / "runs" / datetime.now().strftime(
-        "baseline_%Y%m%d_%H%M%S_%f"
+    criterion = nn.CrossEntropyLoss()
+
+    run_dir = base / "runs" / (
+            args.model + "_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     )
     run_dir.mkdir(parents=True, exist_ok=False)
 
     config = {
-        "model": "SimpleCNN",
+        "model": type(model).__name__,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
-        "learning_rate": 1e-3,
+        "learning_rate": learning_rate,
+        "optimizer": optimizer_name,
+        "weight_decay": weight_decay,
+        "parameter_count": sum(p.numel() for p in model.parameters()),
         "seed": seed,
         "train_images": len(train_data),
         "val_images": len(val_data),
@@ -177,7 +204,7 @@ def main():
                         "val_loss": val["loss"],
                         "config": config,
                     },
-                    run_dir / "best_baseline.pth",
+                    run_dir / f"best_{args.model}.pth",
                 )
 
             writer.writerow({
