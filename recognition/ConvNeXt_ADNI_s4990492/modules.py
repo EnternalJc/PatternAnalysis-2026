@@ -36,6 +36,52 @@ class SimpleCNN(nn.Module):
         flattened = torch.flatten(pooled, start_dim=1)
         return self.classifier(flattened)
 
+class ConvNeXtBlock(nn.Module):
+    """A ConvNeXt block with layer scaling and no stochastic depth."""
+
+    def __init__(self, channels, layer_scale_init=1e-6):
+        super().__init__()
+
+        # Apply a separate spatial filter to each channel.
+        self.depthwise = nn.Conv2d(
+            channels,
+            channels,
+            kernel_size=7,
+            padding=3,
+            groups=channels,
+        )
+
+        # LayerNorm will operate on the last dimension.
+        self.norm = nn.LayerNorm(channels, eps=1e-6)
+
+        # Mix information across channels.
+        self.expand = nn.Linear(channels, 4 * channels)
+        self.activation = nn.GELU()
+        self.project = nn.Linear(4 * channels, channels)
+
+        # Start the residual adjustment with a small scale.
+        self.layer_scale = nn.Parameter(
+            layer_scale_init * torch.ones(channels)
+        )
+
+    def forward(self, x):
+        residual = x
+
+        x = self.depthwise(x)
+
+        # [B, C, H, W] -> [B, H, W, C]
+        x = x.permute(0, 2, 3, 1)
+
+        x = self.norm(x)
+        x = self.expand(x)
+        x = self.activation(x)
+        x = self.project(x)
+        x = self.layer_scale * x
+
+        # Return to [B, C, H, W].
+        x = x.permute(0, 3, 1, 2)
+
+        return residual + x
 
 if __name__ == "__main__":
     torch.manual_seed(42)
