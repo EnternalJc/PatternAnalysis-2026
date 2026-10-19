@@ -24,3 +24,5 @@ overfit_check_*.out
 overfit_check_*.err
 train_baseline_*.out
 train_baseline_*.err
+check_convnext_*.out
+check_convnext_*.err
