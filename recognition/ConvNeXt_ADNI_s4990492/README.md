@@ -2,7 +2,7 @@
 
 ## Project status
 
-Updated 20 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tiny have completed three-epoch pilot runs on Rangpur. Results below are slice-level validation results reported by the student from cluster logs, not final test results. The replacement patient-level split awaits tutor confirmation. Check-off completion has not yet been recorded here.
+Updated 23 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tiny have completed three-epoch pilots and separate twenty-epoch runs on Rangpur. Results below are slice-level validation results reported by the student from cluster logs, not final test results. The existing patient-level split is retained following the leakage audit on 22 October 2026. Check-off completion has not yet been recorded here.
 
 ## Objective and model principles
 
@@ -14,7 +14,7 @@ The baseline uses three convolution/ReLU/pooling blocks, global average pooling 
 
 Course data: `/home/groups/comp3710/ADNI/AD_NC`, with `meta_data_with_label.json` in the parent directory. The audit matched all 30,520 images to metadata and identified 680 subjects: 221 AD and 459 NC, with no subjects assigned to both classes in this collection. Original JSON labels AD=2 and NC=0 are mapped to model targets AD=1 and NC=0.
 
-The supplied training/test directories share 216 subjects despite having no common scan IDs. A provisional class-stratified split groups all scans and slices from a subject together, using seed 42:
+The supplied training/test directories share 216 subjects despite having no common scan IDs. A fixed class-stratified split groups all scans and slices from a subject together, using seed 42:
 
 | Split | Subjects | Scans | Images |
 |---|---:|---:|---:|
@@ -23,6 +23,12 @@ The supplied training/test directories share 216 subjects despite having no comm
 | Test | 104 | 229 | 4,580 |
 
 Subject overlap is zero. Source images are not moved. The loader converts images to grayscale float32 tensors in [0,1], retaining dimensions; sampled inputs were [1,240,256], and both pilot runs completed with batching at this size. No augmentation is currently implemented. Different numbers of scans per subject remain an evaluation/weighting consideration. The test split has not been used for model selection or performance evaluation.
+
+### Leakage audit completed on 22 October 2026
+
+Student-run checks found zero pairwise overlap in patient IDs, scan IDs and paths across the three splits. The combined manifests exactly match the source manifest, with no duplicate paths, conflicting patient classes or scans assigned to multiple patients. All 30,520 images decoded successfully. No duplicate file contents or identical decoded grayscale pixels were found. These checks do not exclude every possible near-duplicate.
+
+Review of the pasted remote code confirmed patient-grouped splitting, per-image preprocessing, validation without parameter updates and checkpoint selection by validation loss. Historical pilot configurations match the current train/validation counts, but do not contain source or manifest hashes. Test-image integrity checks did not involve model-performance evaluation.
 
 ## Environment and usage
 
@@ -68,7 +74,7 @@ Each run creates `runs/<model>_<timestamp>/config.json`, `training_log.csv` and 
 
 ## Preliminary results
 
-Both pilots used batch size 8, seed 42 and the same train/validation manifests and preprocessing. Baseline: Adam, learning rate 1e-3, no weight decay. ConvNeXt: AdamW, learning rate 1e-4, weight decay 0.05. Optimizer differences mean this is not an isolated architecture comparison.
+Both pilots used batch size 8, seed 42 and the same train/validation manifests and preprocessing. The historical baseline config records learning rate 1e-3 but omits optimizer name and weight decay; the current baseline code uses Adam with no weight decay. ConvNeXt: AdamW, learning rate 1e-4, weight decay 0.05. Optimizer differences mean this is not an isolated architecture comparison.
 
 | Model | Epoch | Train accuracy | Validation accuracy | Validation loss |
 |---|---:|---:|---:|---:|
@@ -90,13 +96,39 @@ Times exclude startup and checkpoint writing. Allocated tensor memory is not tot
 
 Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot job: `675518`; its exact run-directory identifier should be added from the cluster log. Training curves and a shareable aggregate metrics artifact remain to be added.
 
+## Twenty-epoch experiment
+
+Both models were trained from fresh initialization using the retained patient-independent split, batch size 8 and seed 42. The current training configuration uses Adam (learning rate 1e-3, weight decay 0) for SimpleCNN and AdamW (learning rate 1e-4, weight decay 0.05) for ConvNeXt. Checkpoints are selected by minimum validation cross-entropy, not maximum validation accuracy. The results below are from student-supplied cluster logs.
+
+| Model | Selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
+|---|---:|---:|---:|---:|---:|
+| SimpleCNN | 9 | 0.5258 | 73.8% | 76.2% | 71.4% |
+| ConvNeXt-Tiny | 1 | 0.6733 | 58.5% | 59.3% | 57.8% |
+
+SimpleCNN achieved its lowest validation loss at epoch 9 (0.5258350444315042). Its highest validation accuracy was 75.6% at epoch 14, but the predefined loss-based selection rule was retained. At epoch 20, training accuracy was 80.6% and validation accuracy was 73.6%.
+
+ConvNeXt achieved its lowest validation loss at epoch 1 (0.6732601917987308). By epoch 20, training accuracy reached 99.2%, while validation accuracy was 56.5% and validation loss was 2.7095. The widening training/validation gap is evidence of overfitting under this configuration. A controlled regularization experiment is the next planned step; simply extending the same training run is not supported by these results. Optimizer settings differ between models, so the comparison does not isolate architecture as the cause of the performance difference.
+
+| Model | Train + validation time/epoch | Peak PyTorch-allocated GPU memory |
+|---|---:|---:|
+| SimpleCNN | 27.4-32.9 s | 124.2 MiB |
+| ConvNeXt-Tiny | 131.5-138.1 s | 1,405.7 MiB |
+
+Times exclude startup and checkpoint writing. These are slice-level validation results, not final test results; the test split remains reserved for evaluation after model selection.
+
+Run directories:
+- `baseline_20261022_211305_056381`
+- `convnext_20261022_212324_269607`
+
+Learning-curve figures will be added after generation and inspection.
+
 ## Feasibility review
 
-The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/×÷Òµ/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The replacement split and evaluation unit for the course's 0.80 test-accuracy target are pending confirmation.
+The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/ä½œä¸š/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The audited patient-level split is retained. The expected evaluation unit for the course's 0.80 test-accuracy target remains to be clarified.
 
 ## Remaining work
 
-- Confirm check-off status and data/evaluation decisions with the tutor.
+- Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
 - Investigate ConvNeXt validation degradation using controlled validation-based experiments.
 - Add required `predict.py` and documented checkpoint-loading examples.
 - Add precision, recall, macro-F1, AUROC, patient-level aggregation and held-out evaluation after model selection.
@@ -108,5 +140,5 @@ The current one-page bilingual review and speaking notes are maintained locally 
 
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
-The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both twenty-epoch runs, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
 
