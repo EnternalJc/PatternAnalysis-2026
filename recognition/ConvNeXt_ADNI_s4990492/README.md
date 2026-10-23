@@ -139,6 +139,22 @@ The plot reads saved metrics only; it does not load images or evaluate a model. 
 
 The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/作业/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The audited patient-level split is retained. The expected evaluation unit for the course's 0.80 test-accuracy target remains to be clarified.
 
+## Planned experiment: training-only affine augmentation
+
+The next experiment adds random rotations within +/-5 degrees and translations within 3% of image width/height to training images only, with bilinear interpolation and zero fill. No flips, random crops or scaling are added.
+
+The patient split, model architecture, optimizer settings, batch size 8, seed 42 and 20-epoch budget remain unchanged. Validation preprocessing remains deterministic. Training starts from fresh initialization; checkpoint selection uses minimum validation loss. Test performance is not used to select augmentation settings. Training metrics in this experiment are measured on augmented inputs, unlike the earlier unaugmented training metrics.
+
+New entry points: `dataset_aug.py`, `train_convnext_aug.py` and `train_convnext_aug.sh`. Outputs use separate `runs/convnext_aug_<timestamp>/` directories. Previous scripts and results are retained. Results are pending.
+
+```bash
+sbatch train_convnext_aug.sh
+# Replace JOBID with the returned job number.
+squeue -j JOBID
+tail -f train_convnext_aug_JOBID.out
+tail -n 60 train_convnext_aug_JOBID.err
+```
+
 ## Remaining work
 
 - Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
