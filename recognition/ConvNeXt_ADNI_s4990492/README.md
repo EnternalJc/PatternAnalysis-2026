@@ -22,7 +22,7 @@ The supplied training/test directories share 216 subjects despite having no comm
 | Validation | 101 | 229 | 4,580 |
 | Test | 104 | 229 | 4,580 |
 
-Subject overlap is zero. Source images are not moved. The loader converts images to grayscale float32 tensors in [0,1], retaining dimensions; sampled inputs were [1,240,256], and both pilot runs completed with batching at this size. No augmentation is currently implemented. Different numbers of scans per subject remain an evaluation/weighting consideration. The test split has not been used for model selection or performance evaluation.
+Subject overlap is zero. Source images are not moved. The loader converts images to grayscale float32 tensors in [0,1], retaining dimensions; sampled inputs were [1,240,256], and both pilot runs completed with batching at this size. The original runs used no augmentation; subsequent experiments apply training-only affine augmentation as described below. Different numbers of scans per subject remain an evaluation/weighting consideration. The test split has not been used for model selection or performance evaluation.
 
 ### Leakage audit completed on 22 October 2026
 
@@ -107,7 +107,7 @@ Both models were trained from fresh initialization using the retained patient-in
 
 SimpleCNN achieved its lowest validation loss at epoch 9 (0.5258350444315042). Its highest validation accuracy was 75.6% at epoch 14, but the predefined loss-based selection rule was retained. At epoch 20, training accuracy was 80.6% and validation accuracy was 73.6%.
 
-ConvNeXt achieved its lowest validation loss at epoch 1 (0.6732601917987308). By epoch 20, training accuracy reached 99.2%, while validation accuracy was 56.5% and validation loss was 2.7095. The widening training/validation gap is evidence of overfitting under this configuration. A controlled regularization experiment is the next planned step; simply extending the same training run is not supported by these results. Optimizer settings differ between models, so the comparison does not isolate architecture as the cause of the performance difference.
+ConvNeXt achieved its lowest validation loss at epoch 1 (0.6732601917987308). By epoch 20, training accuracy reached 99.2%, while validation accuracy was 56.5% and validation loss was 2.7095. The widening training/validation gap is evidence of overfitting under this configuration. This motivated the affine-augmentation experiment reported below; simply extending the same training run is not supported by these results. Optimizer settings differ between models, so the comparison does not isolate architecture as the cause of the performance difference.
 
 | Model | Train + validation time/epoch | Peak PyTorch-allocated GPU memory |
 |---|---:|---:|
@@ -139,13 +139,17 @@ The plot reads saved metrics only; it does not load images or evaluate a model. 
 
 The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/作业/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The audited patient-level split is retained. The expected evaluation unit for the course's 0.80 test-accuracy target remains to be clarified.
 
-## Planned experiment: training-only affine augmentation
+## Training-only affine augmentation results
 
-The next experiment adds random rotations within +/-5 degrees and translations within 3% of image width/height to training images only, with bilinear interpolation and zero fill. No flips, random crops or scaling are added.
+This experiment adds random rotations within +/-5 degrees and translations within 3% of image width/height to training images only, with bilinear interpolation and zero fill. No flips, random crops or scaling are added.
 
 The patient split, model architecture, optimizer settings, batch size 8, seed 42 and 20-epoch budget remain unchanged. Validation preprocessing remains deterministic. Training starts from fresh initialization; checkpoint selection uses minimum validation loss. Test performance is not used to select augmentation settings. Training metrics in this experiment are measured on augmented inputs, unlike the earlier unaugmented training metrics.
 
-New entry points: `dataset_aug.py`, `train_convnext_aug.py` and `train_convnext_aug.sh`. Outputs use separate `runs/convnext_aug_<timestamp>/` directories. Previous scripts and results are retained. Results are pending.
+New entry points: `dataset_aug.py`, `train_convnext_aug.py` and `train_convnext_aug.sh`. Outputs use separate `runs/convnext_aug_<timestamp>/` directories. Previous scripts and results are retained.
+
+The run `convnext_aug_20261023_161053_071278` completed 20 epochs. Minimum validation loss selected epoch 12: loss 0.6243266117852588, validation accuracy 68.1%, NC recall 68.8% and AD recall 67.4%. These values come from student-supplied cluster logs. The selected checkpoint improves on the unaugmented ConvNeXt run but remains below SimpleCNN. The highest validation accuracy was 69.1% at epoch 18; the loss-based selection rule was retained.
+
+At epoch 20, augmented training accuracy was 88.6%, validation accuracy 65.8% and validation loss 0.8484. Validation loss generally increased after epoch 12 while training loss decreased, indicating continued overfitting. This single-seed result does not establish improvement across seeds. Epoch times were 158.4-163.4 seconds, excluding startup and checkpoint writing; peak PyTorch-allocated GPU memory was 1,405.7 MiB.
 
 ```bash
 sbatch train_convnext_aug.sh
@@ -153,6 +157,20 @@ sbatch train_convnext_aug.sh
 squeue -j JOBID
 tail -f train_convnext_aug_JOBID.out
 tail -n 60 train_convnext_aug_JOBID.err
+```
+
+## Planned experiment: lower learning rate with augmentation
+
+The next controlled experiment reduces the ConvNeXt AdamW learning rate from 1e-4 to 3e-5. Affine augmentation, model architecture, weight decay 0.05, batch size 8, seed 42, patient split and the 20-epoch budget remain unchanged. Training starts from fresh initialization. Validation remains unaugmented and checkpoint selection uses minimum validation loss. Test performance is not used for selection.
+
+Entry points: `train_convnext_aug_lr3e5.py` and `train_convnext_aug_lr3e5.sh`, sharing `dataset_aug.py`. Results are pending. Outputs use `runs/convnext_aug_lr3e5_<timestamp>/` to preserve previous experiments.
+
+```bash
+sbatch train_convnext_aug_lr3e5.sh
+# Replace JOBID with the returned job number.
+squeue -j JOBID
+tail -f train_convnext_aug_lr3e5_JOBID.out
+tail -n 60 train_convnext_aug_lr3e5_JOBID.err
 ```
 
 ## Remaining work
@@ -169,5 +187,5 @@ tail -n 60 train_convnext_aug_JOBID.err
 
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
-The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both twenty-epoch runs, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
 
