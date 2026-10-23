@@ -94,16 +94,16 @@ Baseline epoch 3 AD/NC recall: 75.2%/57.9%. ConvNeXt best-validation-loss epoch 
 
 Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; ConvNeXt checkpoint reload remains to be checked.
 
-Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot job: `675518`; its exact run-directory identifier should be added from the cluster log. Training curves and a shareable aggregate metrics artifact remain to be added.
+Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot run: `convnext_20261019_190724_687263` (job `675518`). The twenty-epoch learning curves are described below.
 
 ## Twenty-epoch experiment
 
-Both models were trained from fresh initialization using the retained patient-independent split, batch size 8 and seed 42. The current training configuration uses Adam (learning rate 1e-3, weight decay 0) for SimpleCNN and AdamW (learning rate 1e-4, weight decay 0.05) for ConvNeXt. Checkpoints are selected by minimum validation cross-entropy, not maximum validation accuracy. The results below are from student-supplied cluster logs.
+Both models were trained from fresh initialization using the retained patient-independent split, batch size 8 and seed 42. The current training configuration uses Adam (learning rate 1e-3, weight decay 0) for SimpleCNN and AdamW (learning rate 1e-4, weight decay 0.05) for ConvNeXt. Checkpoints are selected by minimum validation cross-entropy, not maximum validation accuracy. The results below are from student-supplied cluster logs; selected-epoch validation loss and accuracy were also confirmed by reading the saved training CSV files.
 
 | Model | Selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
 |---|---:|---:|---:|---:|---:|
-| SimpleCNN | 9 | 0.5258 | 73.8% | 76.2% | 71.4% |
-| ConvNeXt-Tiny | 1 | 0.6733 | 58.5% | 59.3% | 57.8% |
+| SimpleCNN | 9 | 0.525835 | 73.78% | 76.2% | 71.4% |
+| ConvNeXt-Tiny | 1 | 0.673260 | 58.54% | 59.3% | 57.8% |
 
 SimpleCNN achieved its lowest validation loss at epoch 9 (0.5258350444315042). Its highest validation accuracy was 75.6% at epoch 14, but the predefined loss-based selection rule was retained. At epoch 20, training accuracy was 80.6% and validation accuracy was 73.6%.
 
@@ -117,10 +117,23 @@ ConvNeXt achieved its lowest validation loss at epoch 1 (0.6732601917987308). By
 Times exclude startup and checkpoint writing. These are slice-level validation results, not final test results; the test split remains reserved for evaluation after model selection.
 
 Run directories:
+
 - `baseline_20261022_211305_056381`
 - `convnext_20261022_212324_269607`
 
-Learning-curve figures will be added after generation and inspection.
+![Twenty-epoch training and validation learning curves](figures/training_curves_20ep.png)
+
+The plotting command completed successfully on Rangpur. Copy the generated PNG into the local `figures/` directory and inspect it before committing this report and figure together.
+
+Reproduce the figure in the activated training environment (requires Matplotlib; no GPU required):
+
+```bash
+python plot_training_curves.py \
+  --baseline runs/baseline_20261022_211305_056381 \
+  --convnext runs/convnext_20261022_212324_269607
+```
+
+The plot reads saved metrics only; it does not load images or evaluate a model. Dashed lines mark the minimum-validation-loss epoch for each model.
 
 ## Feasibility review
 
@@ -133,12 +146,12 @@ The current one-page bilingual review and speaking notes are maintained locally 
 - Add required `predict.py` and documented checkpoint-loading examples.
 - Add precision, recall, macro-F1, AUROC, patient-level aggregation and held-out evaluation after model selection.
 - Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
-- Add training plots, feasibility-review content, complete environment details and final engineering recommendation.
+- Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
 - Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
 
 ## Artificial Intelligence Usage Disclosure
 
-ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
+ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
 The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both twenty-epoch runs, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
 
