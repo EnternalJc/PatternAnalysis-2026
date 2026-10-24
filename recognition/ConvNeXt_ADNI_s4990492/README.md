@@ -92,7 +92,7 @@ Baseline epoch 3 AD/NC recall: 75.2%/57.9%. ConvNeXt best-validation-loss epoch 
 | SimpleCNN | 29.3-35.0 s | 124.2 MiB |
 | ConvNeXt-Tiny | 132.2-136.8 s | 1,405.7 MiB |
 
-Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; The selected twenty-epoch checkpoint files were subsequently deserialized on CPU as documented below; loading the selected ConvNeXt state into the model and running inference remain to be checked.
+Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; Both selected twenty-epoch checkpoints subsequently passed strict model loading and full validation inference, as documented below.
 
 Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot run: `convnext_20261019_190724_687263` (job `675518`). The twenty-epoch learning curves are described below.
 
@@ -155,8 +155,8 @@ At epoch 20, augmented training accuracy was 88.6%, validation accuracy 65.8% an
 sbatch train_convnext_aug.sh
 # Replace JOBID with the returned job number.
 squeue -j JOBID
-tail -f train_convnext_aug_JOBID.out
-tail -n 60 train_convnext_aug_JOBID.err
+cat train_convnext_aug_JOBID.out
+cat train_convnext_aug_JOBID.err
 ```
 
 ## Lower-learning-rate augmentation results
@@ -169,8 +169,8 @@ Entry points: `train_convnext_aug_lr3e5.py` and `train_convnext_aug_lr3e5.sh`, s
 sbatch train_convnext_aug_lr3e5.sh
 # Replace JOBID with the returned job number.
 squeue -j JOBID
-tail -f train_convnext_aug_lr3e5_JOBID.out
-tail -n 60 train_convnext_aug_lr3e5_JOBID.err
+cat train_convnext_aug_lr3e5_JOBID.out
+cat train_convnext_aug_lr3e5_JOBID.err
 ```
 
 The run `convnext_aug_lr3e5_20261024_043935_000396` selected epoch 6 by minimum validation loss: 0.5767051260723167, with validation accuracy 67.0%, NC recall 62.1% and AD recall 71.8%. Accuracy and recalls are rounded values from student-supplied logs. At epoch 20, training accuracy was 83.7%, validation accuracy 64.8% and validation loss 0.7844. Epoch times were 159.3-163.9 seconds; peak PyTorch-allocated GPU memory was 1,405.7 MiB. Times exclude startup and checkpoint writing.
@@ -186,7 +186,7 @@ Compared with augmentation at learning rate 1e-4, the selected validation loss i
 | ConvNeXt, affine augmentation, LR 1e-4 | 12 | 0.624327 | 68.1% | 68.8% | 67.4% |
 | ConvNeXt, affine augmentation, LR 3e-5 | 6 | 0.576705 | 67.0% | 62.1% | 71.8% |
 
-These are validation results used during development, not final test estimates. The current candidates for validation inference are the SimpleCNN epoch-9 and augmented LR-3e-5 ConvNeXt epoch-6 checkpoints. No test performance was used for selection.
+These are validation results used during development, not final test estimates. The checkpoints evaluated below are the SimpleCNN epoch-9 and augmented LR-3e-5 ConvNeXt epoch-6 checkpoints. No test performance was used for selection.
 
 ### Checkpoint file verification (24 October 2026)
 
@@ -197,30 +197,59 @@ The student successfully read both selected checkpoint files on CPU using `torch
 | `baseline_20261022_211305_056381` | SimpleCNN | 9 | 0.5258350444315042 | 0.001 | 8 |
 | `convnext_aug_lr3e5_20261024_043935_000396` | ConvNeXtTiny | 6 | 0.5767051260723167 | 0.00003 | 182 |
 
-Both record `validation_loss` as the selection metric. This verifies file deserialization and agreement with the training logs. It does not yet verify strict loading into model instances, forward inference or reproduction of aggregate validation metrics. Those are the next checks for `predict.py` before test evaluation.
+Both record `validation_loss` as the selection metric. This initial check verified file deserialization and agreement with the training logs. Subsequent strict model loading, forward inference and aggregate validation-loss reproduction succeeded, as reported below.
 
 ## Validation evaluation
 
 `predict.py` strictly loads a saved checkpoint and evaluates only the fixed validation manifest without augmentation or parameter updates. It reports cross-entropy, accuracy, balanced accuracy, per-class precision/recall/F1, macro-F1, AD-positive AUROC and a confusion matrix (rows: true; columns: predicted; order: NC, AD). Predictions use logit argmax. Undefined precision is reported as zero; AUROC requires both classes and groups tied scores.
 
-`evaluate_validation.sh` evaluates the selected SimpleCNN and ConvNeXt checkpoints. Aggregate results are saved in each run's `validation_metrics.json`, including the validation-manifest hash and difference from the recorded checkpoint loss. Existing results are not overwritten. No patient identifiers or image paths are included in this JSON. Probabilities are not yet calibrated. Execution and validation-loss reproduction are pending; this version does not implement final test evaluation or patient-level aggregation.
+`evaluate_validation.sh` evaluates the selected SimpleCNN and ConvNeXt checkpoints. Aggregate results are saved in each run's `validation_metrics.json`, including the validation-manifest hash and difference from the recorded checkpoint loss. Existing results are not overwritten. No patient identifiers or image paths are included in this JSON. Probabilities are not yet calibrated. Both evaluations completed successfully; this version does not implement final test evaluation or patient-level aggregation.
 
 ```bash
 sbatch evaluate_validation.sh
 # Replace JOBID with the returned job number.
 squeue -j JOBID
-tail -f validation_JOBID.out
-tail -n 60 validation_JOBID.err
+cat validation_JOBID.out
+cat validation_JOBID.err
 ```
 
 The `validation_*.out` and `validation_*.err` files are local job logs; do not select them for Git commits.
 
+### Reproduced validation results (24 October 2026)
+
+Student-supplied evaluation outputs confirm successful strict checkpoint loading and inference on the same 4,580 validation slices from 101 patients. Both models exactly reproduced the loss recorded in their checkpoints (`loss_difference = 0.0`). Both reported the audited validation manifest SHA-256: `e1217d294d7d0c93749e7661b1dff3d929488a65ad1ab8aecbad19498e16945a`. Evaluation used CUDA, batch size 8 and PyTorch 2.13.0+cu130.
+
+| Metric | SimpleCNN, epoch 9 | ConvNeXt + augmentation, LR 3e-5, epoch 6 |
+|---|---:|---:|
+| Cross-entropy | 0.525835 | 0.576705 |
+| Accuracy | 73.78% | 67.01% |
+| Balanced accuracy | 73.79% | 66.99% |
+| Macro-F1 | 0.7377 | 0.6692 |
+| AD-positive AUROC | 0.8157 | 0.7520 |
+| NC precision | 72.53% | 68.62% |
+| NC recall | 76.18% | 62.15% |
+| NC F1 | 0.7431 | 0.6522 |
+| AD precision | 75.15% | 65.69% |
+| AD recall | 71.39% | 71.83% |
+| AD F1 | 0.7322 | 0.6862 |
+
+Class supports are 2,280 NC and 2,300 AD slices. Confusion matrices use true classes as rows and predicted classes as columns:
+
+| Model | True NC, predicted NC | True NC, predicted AD | True AD, predicted NC | True AD, predicted AD |
+|---|---:|---:|---:|---:|
+| SimpleCNN | 1,737 | 543 | 658 | 1,642 |
+| ConvNeXt | 1,417 | 863 | 648 | 1,652 |
+
+At the default argmax rule, ConvNeXt correctly classified 10 more AD slices but misclassified 320 more NC slices as AD than SimpleCNN. SimpleCNN achieved higher overall accuracy, macro-F1 and AUROC. AUROC 0.8157 is not 81.57% classification accuracy and does not establish the assignment's test-accuracy target.
+
+These are slice-level validation results used during development, not independent final test estimates or patient-level metrics. Confidence probabilities remain uncalibrated. Next steps are validation prediction export, patient-level aggregation and confidence/referral analysis before final test evaluation.
+
 ## Remaining work
 
 - Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
-- Pause new training configurations while implementing validation inference and full metrics for the selected checkpoints.
-- Run the new validation-only `predict.py`, verify metric reproduction, and later extend it with final evaluation and visualizations.
-- Verify the implemented slice-level metrics; add patient-level aggregation and held-out evaluation after model selection.
+- Pause new training configurations while analysing the selected models at patient level and assessing prediction confidence.
+- Extend the validated inference pipeline with private per-sample prediction export, final evaluation and visualizations.
+- Add patient-level aggregation and held-out evaluation after model and operating-rule selection.
 - Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
 - Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
 - Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
@@ -229,5 +258,5 @@ The `validation_*.out` and `validation_*.err` files are local job logs; do not s
 
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
-The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files and full validation inference with exact loss reproduction on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
 
