@@ -244,6 +244,23 @@ At the default argmax rule, ConvNeXt correctly classified 10 more AD slices but 
 
 These are slice-level validation results used during development, not independent final test estimates or patient-level metrics. Confidence probabilities remain uncalibrated. Next steps are validation prediction export, patient-level aggregation and confidence/referral analysis before final test evaluation.
 
+## Validation prediction export and patient aggregation
+
+The planned `export_validation.py` workflow exports validation logits and probabilities for confidence analysis. Patient predictions average slice probabilities within each scan, then average scan probabilities within each patient. This aggregation rule is fixed before inspecting patient-level results. Predictions use argmax, with exact ties assigned to NC.
+
+Private `slice_predictions.csv` and `patient_predictions.csv` files remain under each run's `validation_export/` directory and must not be committed because they contain patient and scan identifiers. `summary.json` contains aggregate metrics only.
+
+The export also recomputes slice-level metrics to check consistency with the earlier evaluation. Probabilities remain uncalibrated. Implementation execution and patient-level results have not yet been confirmed. This workflow does not retrain models or evaluate the test split.
+
+Once the export scripts are available in the remote project directory, submit and inspect the job using:
+
+```bash
+sbatch export_validation.sh
+# Replace JOBID with the returned job number.
+cat validation_export_JOBID.out
+cat validation_export_JOBID.err
+```
+
 ## Remaining work
 
 - Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
