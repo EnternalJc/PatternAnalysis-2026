@@ -2,7 +2,7 @@
 
 ## Project status
 
-Updated 23 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tiny have completed three-epoch pilots and separate twenty-epoch runs on Rangpur. Results below are slice-level validation results reported by the student from cluster logs, not final test results. The existing patient-level split is retained following the leakage audit on 22 October 2026. Check-off completion has not yet been recorded here.
+Updated 24 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tiny have completed three-epoch pilots and separate twenty-epoch runs on Rangpur. Results below are slice-level validation results reported by the student from cluster logs, not final test results. The existing patient-level split is retained following the leakage audit on 22 October 2026. Check-off completion has not yet been recorded here.
 
 ## Objective and model principles
 
@@ -92,7 +92,7 @@ Baseline epoch 3 AD/NC recall: 75.2%/57.9%. ConvNeXt best-validation-loss epoch 
 | SimpleCNN | 29.3-35.0 s | 124.2 MiB |
 | ConvNeXt-Tiny | 132.2-136.8 s | 1,405.7 MiB |
 
-Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; ConvNeXt checkpoint reload remains to be checked.
+Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; The selected twenty-epoch checkpoint files were subsequently deserialized on CPU as documented below; loading the selected ConvNeXt state into the model and running inference remain to be checked.
 
 Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot run: `convnext_20261019_190724_687263` (job `675518`). The twenty-epoch learning curves are described below.
 
@@ -159,11 +159,11 @@ tail -f train_convnext_aug_JOBID.out
 tail -n 60 train_convnext_aug_JOBID.err
 ```
 
-## Planned experiment: lower learning rate with augmentation
+## Lower-learning-rate augmentation results
 
-The next controlled experiment reduces the ConvNeXt AdamW learning rate from 1e-4 to 3e-5. Affine augmentation, model architecture, weight decay 0.05, batch size 8, seed 42, patient split and the 20-epoch budget remain unchanged. Training starts from fresh initialization. Validation remains unaugmented and checkpoint selection uses minimum validation loss. Test performance is not used for selection.
+This controlled experiment reduced the ConvNeXt AdamW learning rate from 1e-4 to 3e-5. Affine augmentation, model architecture, weight decay 0.05, batch size 8, seed 42, patient split and the 20-epoch budget remain unchanged. Training starts from fresh initialization. Validation remains unaugmented and checkpoint selection uses minimum validation loss. Test performance is not used for selection.
 
-Entry points: `train_convnext_aug_lr3e5.py` and `train_convnext_aug_lr3e5.sh`, sharing `dataset_aug.py`. Results are pending. Outputs use `runs/convnext_aug_lr3e5_<timestamp>/` to preserve previous experiments.
+Entry points: `train_convnext_aug_lr3e5.py` and `train_convnext_aug_lr3e5.sh`, sharing `dataset_aug.py`. The run completed 20 epochs. Outputs use `runs/convnext_aug_lr3e5_<timestamp>/` to preserve previous experiments.
 
 ```bash
 sbatch train_convnext_aug_lr3e5.sh
@@ -173,10 +173,36 @@ tail -f train_convnext_aug_lr3e5_JOBID.out
 tail -n 60 train_convnext_aug_lr3e5_JOBID.err
 ```
 
+The run `convnext_aug_lr3e5_20261024_043935_000396` selected epoch 6 by minimum validation loss: 0.5767051260723167, with validation accuracy 67.0%, NC recall 62.1% and AD recall 71.8%. Accuracy and recalls are rounded values from student-supplied logs. At epoch 20, training accuracy was 83.7%, validation accuracy 64.8% and validation loss 0.7844. Epoch times were 159.3-163.9 seconds; peak PyTorch-allocated GPU memory was 1,405.7 MiB. Times exclude startup and checkpoint writing.
+
+Compared with augmentation at learning rate 1e-4, the selected validation loss improved while selected-checkpoint accuracy decreased slightly. The predefined loss-based selection rule was retained. Lower cross-entropy alone does not establish good confidence calibration. SimpleCNN still achieved lower validation loss and higher validation accuracy.
+
+### Validation-loss-selected comparison
+
+| Configuration | Selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
+|---|---:|---:|---:|---:|---:|
+| SimpleCNN | 9 | 0.525835 | 73.78% | 76.2% | 71.4% |
+| ConvNeXt, no augmentation | 1 | 0.673260 | 58.54% | 59.3% | 57.8% |
+| ConvNeXt, affine augmentation, LR 1e-4 | 12 | 0.624327 | 68.1% | 68.8% | 67.4% |
+| ConvNeXt, affine augmentation, LR 3e-5 | 6 | 0.576705 | 67.0% | 62.1% | 71.8% |
+
+These are validation results used during development, not final test estimates. The current candidates for validation inference are the SimpleCNN epoch-9 and augmented LR-3e-5 ConvNeXt epoch-6 checkpoints. No test performance was used for selection.
+
+### Checkpoint file verification (24 October 2026)
+
+The student successfully read both selected checkpoint files on CPU using `torch.load(..., map_location="cpu", weights_only=True)`:
+
+| Run | Saved model | Saved epoch | Saved validation loss | Learning rate | State-dictionary entries |
+|---|---|---:|---:|---:|---:|
+| `baseline_20261022_211305_056381` | SimpleCNN | 9 | 0.5258350444315042 | 0.001 | 8 |
+| `convnext_aug_lr3e5_20261024_043935_000396` | ConvNeXtTiny | 6 | 0.5767051260723167 | 0.00003 | 182 |
+
+Both record `validation_loss` as the selection metric. This verifies file deserialization and agreement with the training logs. It does not yet verify strict loading into model instances, forward inference or reproduction of aggregate validation metrics. Those are the next checks for `predict.py` before test evaluation.
+
 ## Remaining work
 
 - Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
-- Investigate ConvNeXt validation degradation using controlled validation-based experiments.
+- Pause new training configurations while implementing validation inference and full metrics for the selected checkpoints.
 - Add required `predict.py` and documented checkpoint-loading examples.
 - Add precision, recall, macro-F1, AUROC, patient-level aggregation and held-out evaluation after model selection.
 - Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
@@ -187,5 +213,5 @@ tail -n 60 train_convnext_aug_lr3e5_JOBID.err
 
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
-The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, and baseline checkpoint reload on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
 
