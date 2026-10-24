@@ -199,12 +199,28 @@ The student successfully read both selected checkpoint files on CPU using `torch
 
 Both record `validation_loss` as the selection metric. This verifies file deserialization and agreement with the training logs. It does not yet verify strict loading into model instances, forward inference or reproduction of aggregate validation metrics. Those are the next checks for `predict.py` before test evaluation.
 
+## Validation evaluation
+
+`predict.py` strictly loads a saved checkpoint and evaluates only the fixed validation manifest without augmentation or parameter updates. It reports cross-entropy, accuracy, balanced accuracy, per-class precision/recall/F1, macro-F1, AD-positive AUROC and a confusion matrix (rows: true; columns: predicted; order: NC, AD). Predictions use logit argmax. Undefined precision is reported as zero; AUROC requires both classes and groups tied scores.
+
+`evaluate_validation.sh` evaluates the selected SimpleCNN and ConvNeXt checkpoints. Aggregate results are saved in each run's `validation_metrics.json`, including the validation-manifest hash and difference from the recorded checkpoint loss. Existing results are not overwritten. No patient identifiers or image paths are included in this JSON. Probabilities are not yet calibrated. Execution and validation-loss reproduction are pending; this version does not implement final test evaluation or patient-level aggregation.
+
+```bash
+sbatch evaluate_validation.sh
+# Replace JOBID with the returned job number.
+squeue -j JOBID
+tail -f validation_JOBID.out
+tail -n 60 validation_JOBID.err
+```
+
+The `validation_*.out` and `validation_*.err` files are local job logs; do not select them for Git commits.
+
 ## Remaining work
 
 - Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
 - Pause new training configurations while implementing validation inference and full metrics for the selected checkpoints.
-- Add required `predict.py` and documented checkpoint-loading examples.
-- Add precision, recall, macro-F1, AUROC, patient-level aggregation and held-out evaluation after model selection.
+- Run the new validation-only `predict.py`, verify metric reproduction, and later extend it with final evaluation and visualizations.
+- Verify the implemented slice-level metrics; add patient-level aggregation and held-out evaluation after model selection.
 - Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
 - Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
 - Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
