@@ -28,3 +28,4 @@ check_convnext_*.out
 check_convnext_*.err
 train_convnext_*.out
 train_convnext_*.err
+/local_data/

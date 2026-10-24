@@ -8,7 +8,7 @@ Updated 24 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tin
 
 Classify Alzheimer's disease (AD) versus normal control (NC, called CN in the assignment) MRI slices, and investigate whether prediction confidence can identify errors for human review. Compare classification performance, confidence reliability and computational cost.
 
-The baseline uses three convolution/ReLU/pooling blocks, global average pooling and a two-class linear head (23,426 parameters). ConvNeXt-Tiny uses depthwise spatial convolution, LayerNorm, channel expansion/projection, GELU and residual connections. Stage depths are [3, 3, 9, 3] and widths [96, 192, 384, 768]. The implementation adapts the input to one grayscale channel and the output to two classes (27,818,594 parameters). No pretrained weights or stochastic depth are currently used. Architecture source: [Liu et al., A ConvNet for the 2020s, CVPR 2022](https://arxiv.org/abs/2201.03545) and [author implementation](https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py).
+The baseline uses three convolution/ReLU/pooling blocks, global average pooling and a two-class linear head (23,426 parameters). ConvNeXt-Tiny uses depthwise spatial convolution, LayerNorm, channel expansion/projection, GELU and residual connections. Stage depths are [3, 3, 9, 3] and widths [96, 192, 384, 768]. The implementation adapts the input to one grayscale channel and the output to two classes (27,818,594 parameters). The self-implemented models use no pretrained weights or stochastic depth. Architecture source: [Liu et al., A ConvNet for the 2020s, CVPR 2022](https://arxiv.org/abs/2201.03545) and [author implementation](https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py).
 
 ## Data audit and preprocessing
 
@@ -137,7 +137,7 @@ The plot reads saved metrics only; it does not load images or evaluate a model. 
 
 ## Feasibility review
 
-The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/作业/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The audited patient-level split is retained. The expected evaluation unit for the course's 0.80 test-accuracy target remains to be clarified.
+The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/作业/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The audited patient-level split is retained. Teaching-team clarification confirms that the 0.80 test-accuracy target is evaluated at slice level.
 
 ## Training-only affine augmentation results
 
@@ -242,11 +242,11 @@ Class supports are 2,280 NC and 2,300 AD slices. Confusion matrices use true cla
 
 At the default argmax rule, ConvNeXt correctly classified 10 more AD slices but misclassified 320 more NC slices as AD than SimpleCNN. SimpleCNN achieved higher overall accuracy, macro-F1 and AUROC. AUROC 0.8157 is not 81.57% classification accuracy and does not establish the assignment's test-accuracy target.
 
-These are slice-level validation results used during development, not independent final test estimates or patient-level metrics. Confidence probabilities remain uncalibrated. Next steps are validation prediction export, patient-level aggregation and confidence/referral analysis before final test evaluation.
+These are slice-level validation results used during development, not independent final test estimates or patient-level metrics. Confidence probabilities remain uncalibrated. Next steps are slice-level validation prediction export and confidence/referral analysis before final test evaluation. Patient aggregation is optional and deferred.
 
-## Validation prediction export and patient aggregation
+## Deferred optional patient aggregation
 
-The planned `export_validation.py` workflow exports validation logits and probabilities for confidence analysis. Patient predictions average slice probabilities within each scan, then average scan probabilities within each patient. This aggregation rule is fixed before inspecting patient-level results. Predictions use argmax, with exact ties assigned to NC.
+This optional workflow is deferred following teaching-team clarification; the slice-only workflow below is the current priority. The previously proposed `export_validation.py` workflow exports validation logits and probabilities for confidence analysis. Patient predictions average slice probabilities within each scan, then average scan probabilities within each patient. This aggregation rule is fixed before inspecting patient-level results. Predictions use argmax, with exact ties assigned to NC.
 
 Private `slice_predictions.csv` and `patient_predictions.csv` files remain under each run's `validation_export/` directory and must not be committed because they contain patient and scan identifiers. `summary.json` contains aggregate metrics only.
 
@@ -261,12 +261,35 @@ cat validation_export_JOBID.out
 cat validation_export_JOBID.err
 ```
 
+## Teaching-team clarifications and current evaluation plan
+
+According to teaching-team Q&A supplied by the student, the 0.80 test-accuracy target applies to individual slices. Patient aggregation is optional and cannot replace the required slice-level metric. Patient-independent splitting remains necessary to prevent leakage.
+
+The model architecture must be defined by the student; directly calling a prebuilt ConvNeXt does not meet that requirement. The self-implemented ConvNeXt remains the primary architecture. Public implementations may be referenced and adapted with proper attribution, but experiments and analysis must be the student's own work. Training from scratch is the default; pretrained weights require explicit justification, acknowledgement and supporting comparison.
+
+The teaching team states that a shortfall against the 0.80 target will not itself lose marks when supported by reasonable trial experiments, best effort and sound analysis. This does not remove other assessment requirements. Dataset preprocessing may provisionally be treated as consistent between the original partitions, but the exact 20-slice selection procedure has not been confirmed.
+
+### Slice-level prediction export
+
+`export_slice_predictions.py` exports validation logits, probabilities, predictions and correctness for the self-implemented models. `row_index` is the zero-based data-row index in the validation manifest and can support later failure-case lookup. Outputs contain no patient IDs or image paths, but remain private runtime artifacts under each run's `validation_slice_export/` directory. Existing export directories are not overwritten.
+
+The script recomputes slice-level metrics for consistency checking. It does not train a model, aggregate patients, calibrate probabilities or load test images. Export execution is pending.
+
+```bash
+sbatch export_slice_predictions.sh
+# Replace JOBID with the returned job number.
+cat validation_slices_JOBID.out
+cat validation_slices_JOBID.err
+```
+
+Do not commit generated predictions or `validation_slices_*.out/.err` logs. Use the exported validation predictions for confidence and referral analysis; final test evaluation remains held out.
+
 ## Remaining work
 
-- Confirm recorded check-off completion and clarify the expected evaluation unit; retain the audited patient split.
-- Pause new training configurations while analysing the selected models at patient level and assessing prediction confidence.
+- Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
+- Prioritize slice-level confidence analysis for the self-implemented models; defer patient aggregation. The unused prebuilt-model experiment scripts have been removed.
 - Extend the validated inference pipeline with private per-sample prediction export, final evaluation and visualizations.
-- Add patient-level aggregation and held-out evaluation after model and operating-rule selection.
+- Perform held-out slice-level evaluation after model and operating-rule selection; patient aggregation is optional.
 - Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
 - Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
 - Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
