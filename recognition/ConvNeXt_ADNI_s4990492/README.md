@@ -273,7 +273,7 @@ The teaching team states that a shortfall against the 0.80 target will not itsel
 
 `export_slice_predictions.py` exports validation logits, probabilities, predictions and correctness for the self-implemented models. `row_index` is the zero-based data-row index in the validation manifest and can support later failure-case lookup. Outputs contain no patient IDs or image paths, but remain private runtime artifacts under each run's `validation_slice_export/` directory. Existing export directories are not overwritten.
 
-The script recomputes slice-level metrics for consistency checking. It does not train a model, aggregate patients, calibrate probabilities or load test images. Export execution is pending.
+The script recomputes slice-level metrics for consistency checking. It does not train a model, aggregate patients, calibrate probabilities or load test images. Both validation slice exports completed and reproduced the previously reported metrics and manifest hash, according to student-supplied outputs.
 
 ```bash
 sbatch export_slice_predictions.sh
@@ -286,7 +286,7 @@ Do not commit generated predictions or `validation_slices_*.out/.err` logs. Use 
 
 ## Local Windows execution
 
-Local hardware reported on 25 October 2026: NVIDIA RTX 4050 Laptop GPU, 6,141 MiB total VRAM, driver 596.21. The repository `.venv` uses Python 3.14.7 and did not yet have PyTorch installed when inspected. Local GPU training feasibility and speed remain to be measured; A100 measurements do not establish laptop timings or memory usage.
+Local hardware reported on 25 October 2026: NVIDIA RTX 4050 Laptop GPU, 6,141 MiB total VRAM, driver 596.21. The repository `.venv` uses Python 3.14.7 and did not yet have PyTorch installed when inspected. The student subsequently completed a batch-size-8 local GPU smoke run: two training and two validation batches in 2.3 seconds, with peak allocated memory 1,407.2 MiB. No checkpoint was saved. These partial-batch results verify execution only; full-epoch speed and generalization remain unmeasured.
 
 `prepare_local_data.py` verifies the original split hashes and every local image path, then writes separate `local_data/splits_local/` manifests without changing patient membership. Original manifests remain unchanged. The repository already ignores `/local_data/`. This path audit does not verify downloaded image contents.
 
@@ -302,6 +302,22 @@ cat local_smoke.log
 ```
 
 Do not commit `local_smoke.log`. If the local check passes, use measured memory and speed to decide full-run settings. Keeping batch size 8 preserves the earlier optimization setup; lowering it changes the experiment and must be recorded. Local package versions and hardware differ from Rangpur, so exact numerical reproduction is not guaranteed.
+
+## Planned local stochastic-depth comparison
+
+`modules_sd.py` extends the self-implemented ConvNeXt with per-sample stochastic depth on residual branches. Drop probabilities increase linearly across 18 blocks from 0 to 0.1. Surviving branches are scaled by inverse keep probability during training; evaluation uses all branches. Model initialization is copied from the original implementation, and replacement construction preserves the CPU RNG state. No pretrained or prebuilt model is used.
+
+`train_convnext_local_sd.py` is a separate local entry point. The planned comparison runs both the original local trainer and this variant from fresh initialization for 20 epochs, with the same patient split, affine augmentation, batch size 8, seed 42, AdamW LR 3e-5 and weight decay 0.05. Different hardware/software means Rangpur alone is not a matched local control. Stochastic depth adds training randomness; identical seeds do not imply identical training trajectories.
+
+First check the new variant in PowerShell:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u train_convnext_local_sd.py --model convnext --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath local_sd_smoke.log
+cat local_sd_smoke.log
+```
+
+Full training results are pending. Preserve old runs and do not commit local log files. The SD checkpoint records model name `ConvNeXtTinySD`; the current `predict.py` model registry does not yet support it and must be extended before evaluating an SD checkpoint.
 
 ## Remaining work
 
