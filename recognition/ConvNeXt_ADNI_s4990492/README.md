@@ -370,6 +370,55 @@ cat validation_confidence.log
 
 Do not commit the log or runtime outputs. Codex added and ran this CPU analysis and visually checked both generated figures; the student performed the underlying GPU training and prediction export.
 
+## Local cosine learning-rate comparison
+
+`train_convnext_local_cosine.py` is a separate from-scratch experiment using the original self-implemented ConvNeXtTiny. Against the local fixed-LR control, only the learning-rate schedule changes: for 20 epochs, epoch 1 uses 3e-5 and epoch 20 uses 1e-6, following an epoch-wise cosine curve without warmup. The purpose is to test whether smaller late updates improve validation performance after the earlier epoch-6 optimum; improvement is not assumed.
+
+Patient membership, seed 42, batch size 8, affine augmentation, AdamW weight decay 0.05, full precision and minimum validation-loss checkpoint selection remain unchanged. No stochastic depth, pretrained weights or test data are used. The configuration records schedule endpoints and duration; the CSV records the actual learning rate each epoch. Each invocation creates a new run directory, and smoke runs save no checkpoint. This comparison requires a fresh 20-epoch run, not continuation from the selected epoch-6 checkpoint.
+
+Syntax and CPU checks verified the schedule endpoints, monotonic decrease and bounds. The student subsequently completed the 20-epoch run `local_convnext_aug_cosine_20261025_201434_601293`. Minimum validation loss selected epoch 6: loss 0.5626075655547292, accuracy 69.8%, NC recall 58.7% and AD recall 80.7% (percentages rounded in the supplied log). At epoch 20, training accuracy was 79.1% and validation accuracy 65.6%. This single-seed experiment did not improve on the fixed-LR local control (loss 0.5619357655483692, accuracy 70.0873%). Do not infer that all learning-rate schedules are ineffective.
+
+Run the smoke check first in PowerShell:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u train_convnext_local_cosine.py --model convnext --epochs 20 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath local_cosine_smoke.log
+cat local_cosine_smoke.log
+```
+
+If the smoke check passes, run the full comparison separately:
+
+```powershell
+& $py -u train_convnext_local_cosine.py --model convnext --epochs 20 --batch-size 8 2>&1 | Tee-Object -FilePath local_cosine_20ep.log
+cat local_cosine_20ep.log
+```
+
+Do not commit the logs or generated run artifacts. Compare the selected checkpoint with the local fixed-LR control (validation loss 0.561936, accuracy 70.0873%) using the same selection rule. A negative result remains part of the experimental evidence.
+
+## Custom architecture parity check
+
+`check_convnext_parity.py` checks the custom implementation against the installed torchvision 0.26.0 ConvNeXt implementation on CPU using synthetic inputs only. The reference uses `weights=None`, a single-channel stem, two output classes and stochastic depth disabled to match the custom control. It is a diagnostic oracle only; training continues to use `modules.ConvNeXtTiny`. No pretrained weights or medical data are loaded, and no optimizer update is performed.
+
+Reference source: [torchvision ConvNeXt implementation](https://github.com/pytorch/vision/blob/main/torchvision/models/convnext.py). The result records the installed source hash and versions rather than assuming the linked main branch is immutable.
+
+Source inspection found matching stage depths/widths, depthwise convolution, channel expansion, GELU, normalization epsilon, residual computation and downsampling. Both sources initialize convolution/linear weights with `trunc_normal_(std=0.02)` and zero biases. Equal seeds need not produce identical parameters because module construction consumes random numbers in different orders; the numerical check explicitly copies all custom parameters into the diagnostic reference.
+
+The executed check mapped all 182 parameter tensors, totaling 27,818,594 parameters. At synthetic input shape `[1,1,240,256]`, the stem, all four stages, all downsampling outputs and final logits had maximum absolute difference 0.0. The final feature map was `[1,768,7,8]` in both implementations. This includes the same floor behavior for the odd spatial dimension at the last downsampling.
+
+A second check increased residual Layer Scale to 0.1 in memory, to avoid testing only nearly-zero residual contributions at initialization. In training mode, with stochastic depth disabled and synthetic inputs `[2,1,64,64]`, logits, cross-entropy loss, input gradients and all parameter gradients had maximum absolute difference 0.0. This temporary change was not saved to any model checkpoint or training source. Assertions used rtol=1e-4 and atol=2e-6.
+
+These results support computational parity for the tested cases; they do not validate the complete training pipeline, stochastic-depth variant or generalisation. A prebuilt implementation alone is not an evidenced remedy for the current performance gap.
+
+The check has already been run; to reproduce it from the project folder:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py check_convnext_parity.py 2>&1 | Tee-Object -FilePath architecture_parity.log
+cat architecture_parity.log
+```
+
+JSON results are saved in a new ignored `runs/architecture_parity_*` directory. Do not commit runtime logs. Codex authored and ran this synthetic check; the coursework training architecture remains student-defined.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
