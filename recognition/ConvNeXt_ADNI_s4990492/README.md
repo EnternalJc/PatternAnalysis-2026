@@ -419,6 +419,31 @@ cat architecture_parity.log
 
 JSON results are saved in a new ignored `runs/architecture_parity_*` directory. Do not commit runtime logs. Codex authored and ran this synthetic check; the coursework training architecture remains student-defined.
 
+## Reduced-width ConvNeXt experiment (pending GPU execution)
+
+The teaching-team answer supplied by the student explicitly permits a reduced-size ConvNeXt at Hard difficulty when its core design is retained and explained. `modules_compact.py` defines an independent ConvNeXt variant using the existing custom blocks and channel normalization. It retains four stages and depths [3,3,9,3], and halves the widths to [48,96,192,384]. Depthwise 7x7 convolutions, fourfold channel expansion, GELU, Layer Scale, residual connections and downsampling remain in place. This is a reduced-width variant, not standard ConvNeXt-Tiny. It has 7,052,594 parameters, compared with 27,818,594 in the original custom model.
+
+The hypothesis is that lower capacity may improve validation performance given the observed training/validation gap. This is an experiment, not an established explanation or promised improvement. `train_convnext_local_compact.py` trains from fresh random initialization and preserves the fixed-LR control's patient split, original image dimensions, affine augmentation, seed 42, batch size 8, AdamW LR 3e-5, weight decay 0.05 and minimum-validation-loss checkpoint selection. No cosine schedule, stochastic depth or pretrained weights are added. Same seeds do not imply identical random draws or optimization trajectories across different architectures.
+
+Codex ran CPU synthetic checks at input shape [2,1,240,256]: syntax, stage depths/widths, forward/backward execution, finite gradients for every parameter, an optimizer update and evaluation confusion counts passed. These checks do not measure medical-data performance. GPU smoke and full training remain pending.
+
+From the project folder in PowerShell:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u train_convnext_local_compact.py --model convnext --epochs 20 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath local_compact_smoke.log
+cat local_compact_smoke.log
+```
+
+After SMOKE PASS, run the full experiment separately:
+
+```powershell
+& $py -u train_convnext_local_compact.py --model convnext --epochs 20 --batch-size 8 2>&1 | Tee-Object -FilePath local_compact_20ep.log
+cat local_compact_20ep.log
+```
+
+Each invocation creates a new run directory; smoke checks save no checkpoint. Full checkpoints retain the filename `best_convnext.pth` but record model `ConvNeXtCompact` in their configuration. Existing inference tools must be extended explicitly before loading these checkpoints; do not load them as ConvNeXtTiny. Compare the selected epoch against the local fixed-LR control (validation loss 0.561936, accuracy 70.0873%). Do not commit logs, model weights or runtime predictions. No test data are read by this trainer.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
