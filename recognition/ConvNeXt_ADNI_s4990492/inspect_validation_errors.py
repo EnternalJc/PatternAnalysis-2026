@@ -99,7 +99,7 @@ def main():
             writer.writerow([i, labels[i].item(), predictions[i].item(),
                              probabilities[i, 1].item(), confidence[i].item()])
     if any(groups):
-        fig, axes = plt.subplots(2, 3, figsize=(12, 8))
+        fig, axes = plt.subplots(2, 3, figsize=(12, 10), layout="constrained")
         for axis in axes.flat:
             axis.set_axis_off()
         names = ["NC", "AD"]
@@ -113,7 +113,6 @@ def main():
                     f"\nConfidence {confidence[i].item():.1%}"
                 )
         fig.suptitle("High-confidence validation errors: distinct patients per error type")
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         fig.savefig(output / "high_confidence_errors.png", dpi=160)
         plt.close(fig)
     (output / "summary.json").write_text(serialized, encoding="utf-8")

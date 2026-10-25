@@ -341,6 +341,35 @@ $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
 
 The generated MRI preview and row-index statistics are private inspection artifacts; do not commit them to the public repository.
 
+## Local validation confidence and error analysis
+
+`analyse_validation_confidence.py` reads the saved local control validation predictions on CPU, verifies the manifest hash, row order, labels, probability consistency and reproduced accuracy, and writes separate artifacts under the ignored run directory `validation_confidence_analysis/`. It does not train, access test data or select a new operating threshold. Existing output directories are preserved (a repeated run raises an error).
+
+The completed analysis reproduced 70.0873% accuracy on all 4,580 validation slices at epoch 6, with NC recall 60.2632% and AD recall 79.8261%. There were 906 NC-to-AD errors and 464 AD-to-NC errors. Ten equal-width confidence bins over [0,1] gave ECE 0.0240802; the binary AD-probability Brier score was 0.193046. These are descriptive validation estimates, not evidence of clinical calibration; slices within patients are correlated.
+
+| Minimum confidence retained | Coverage | Retained slices | Retained accuracy | Referred slices |
+|---|---:|---:|---:|---:|
+| 0.50 | 100.00% | 4580 | 70.09% | 0 |
+| 0.70 | 49.30% | 2258 | 80.47% | 2322 |
+| 0.80 | 27.07% | 1240 | 88.47% | 3340 |
+| 0.90 | 10.68% | 489 | 97.55% | 4091 |
+
+Referral preserves the original predictions and retains slices with confidence >= the stated threshold. Retained accuracy does not satisfy the assignment's full-test accuracy target. In particular, retaining confidence >= 0.70 requires referring over half the validation slices. Twelve incorrect predictions remain at confidence >= 0.90, including ten AD-to-NC errors.
+
+An exploratory AD threshold grid from 0.10 to 0.90 in steps of 0.01 classified every validation slice (AD if probability > threshold, otherwise NC). The highest observed grid accuracy was 70.0873% at 0.50, so this grid provides no accuracy improvement. Continue model-training experiments; do not use test results to tune thresholds.
+
+The script also redraws the same six saved error examples as `high_confidence_errors_v2.png` with separated titles. The original plot and predictions are preserved. The plotting layout in `inspect_validation_errors.py` is corrected for future exports. All generated MRI previews and per-slice outputs remain private under `runs/`.
+
+To run on a fresh export from the project directory (already completed for the current control):
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py analyse_validation_confidence.py 2>&1 | Tee-Object -FilePath validation_confidence.log
+cat validation_confidence.log
+```
+
+Do not commit the log or runtime outputs. Codex added and ran this CPU analysis and visually checked both generated figures; the student performed the underlying GPU training and prediction export.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
