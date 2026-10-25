@@ -284,6 +284,25 @@ cat validation_slices_JOBID.err
 
 Do not commit generated predictions or `validation_slices_*.out/.err` logs. Use the exported validation predictions for confidence and referral analysis; final test evaluation remains held out.
 
+## Local Windows execution
+
+Local hardware reported on 25 October 2026: NVIDIA RTX 4050 Laptop GPU, 6,141 MiB total VRAM, driver 596.21. The repository `.venv` uses Python 3.14.7 and did not yet have PyTorch installed when inspected. Local GPU training feasibility and speed remain to be measured; A100 measurements do not establish laptop timings or memory usage.
+
+`prepare_local_data.py` verifies the original split hashes and every local image path, then writes separate `local_data/splits_local/` manifests without changing patient membership. Original manifests remain unchanged. The repository already ignores `/local_data/`. This path audit does not verify downloaded image contents.
+
+`train_convnext_local.py` preserves the self-implemented ConvNeXt, affine augmentation, AdamW LR 3e-5 and weight decay 0.05. It reads local manifests and uses zero DataLoader workers for Windows. `--smoke` processes only two training and two validation batches, saves no checkpoint, and labels its outputs diagnostic-only. Results go into ignored project `runs/` directories. Full training defaults should be passed explicitly; no stochastic-depth or mixed-precision changes are introduced during the environment migration.
+
+From the project folder in PowerShell, use the repository virtual-environment Python:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py prepare_local_data.py
+& $py -u train_convnext_local.py --model convnext --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath local_smoke.log
+cat local_smoke.log
+```
+
+Do not commit `local_smoke.log`. If the local check passes, use measured memory and speed to decide full-run settings. Keeping batch size 8 preserves the earlier optimization setup; lowering it changes the experiment and must be recorded. Local package versions and hardware differ from Rangpur, so exact numerical reproduction is not guaranteed.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
