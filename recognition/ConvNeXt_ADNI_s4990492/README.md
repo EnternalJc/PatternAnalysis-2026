@@ -286,7 +286,7 @@ Do not commit generated predictions or `validation_slices_*.out/.err` logs. Use 
 
 ## Local Windows execution
 
-Local hardware reported on 25 October 2026: NVIDIA RTX 4050 Laptop GPU, 6,141 MiB total VRAM, driver 596.21. The repository `.venv` uses Python 3.14.7 and did not yet have PyTorch installed when inspected. The student subsequently completed a batch-size-8 local GPU smoke run: two training and two validation batches in 2.3 seconds, with peak allocated memory 1,407.2 MiB. No checkpoint was saved. These partial-batch results verify execution only; full-epoch speed and generalization remain unmeasured.
+Local hardware reported on 25 October 2026: NVIDIA RTX 4050 Laptop GPU, 6,141 MiB total VRAM, driver 596.21. The local environment uses Python 3.14.7, PyTorch 2.11.0+cu128, torchvision 0.26.0+cu128 and Matplotlib 3.11.2, as confirmed by the student. The student subsequently completed a batch-size-8 local GPU smoke run: two training and two validation batches in 2.3 seconds, with peak allocated memory 1,407.2 MiB. No checkpoint was saved. These partial-batch results verify execution only; subsequent full-run results are reported below.
 
 `prepare_local_data.py` verifies the original split hashes and every local image path, then writes separate `local_data/splits_local/` manifests without changing patient membership. Original manifests remain unchanged. The repository already ignores `/local_data/`. This path audit does not verify downloaded image contents.
 
@@ -303,11 +303,11 @@ cat local_smoke.log
 
 Do not commit `local_smoke.log`. If the local check passes, use measured memory and speed to decide full-run settings. Keeping batch size 8 preserves the earlier optimization setup; lowering it changes the experiment and must be recorded. Local package versions and hardware differ from Rangpur, so exact numerical reproduction is not guaranteed.
 
-## Planned local stochastic-depth comparison
+## Local stochastic-depth comparison
 
 `modules_sd.py` extends the self-implemented ConvNeXt with per-sample stochastic depth on residual branches. Drop probabilities increase linearly across 18 blocks from 0 to 0.1. Surviving branches are scaled by inverse keep probability during training; evaluation uses all branches. Model initialization is copied from the original implementation, and replacement construction preserves the CPU RNG state. No pretrained or prebuilt model is used.
 
-`train_convnext_local_sd.py` is a separate local entry point. The planned comparison runs both the original local trainer and this variant from fresh initialization for 20 epochs, with the same patient split, affine augmentation, batch size 8, seed 42, AdamW LR 3e-5 and weight decay 0.05. Different hardware/software means Rangpur alone is not a matched local control. Stochastic depth adds training randomness; identical seeds do not imply identical training trajectories.
+`train_convnext_local_sd.py` is a separate local entry point. The completed comparison ran both the original local trainer and this variant from fresh initialization for 20 epochs, with the same patient split, affine augmentation, batch size 8, seed 42, AdamW LR 3e-5 and weight decay 0.05. Different hardware/software means Rangpur alone is not a matched local control. Stochastic depth adds training randomness; identical seeds do not imply identical training trajectories.
 
 First check the new variant in PowerShell:
 
@@ -317,7 +317,29 @@ $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
 cat local_sd_smoke.log
 ```
 
-Full training results are pending. Preserve old runs and do not commit local log files. The SD checkpoint records model name `ConvNeXtTinySD`; the current `predict.py` model registry does not yet support it and must be extended before evaluating an SD checkpoint.
+Both 20-epoch runs completed. Minimum validation loss selected epoch 6 in each run:
+
+| Local configuration | Selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
+|---|---:|---:|---:|---:|---:|
+| Control: affine augmentation, LR 3e-5 | 6 | 0.561936 | 70.1% | 60.3% | 79.8% |
+| Same settings with maximum stochastic depth 0.1 | 6 | 0.563209 | 69.8% | 59.5% | 80.0% |
+
+Exact selected losses from student-supplied logs are 0.5619357655483692 and 0.5632090744444507. The run identifiers are `local_convnext_aug_lr3e5_20261025_123556_489058` and `local_convnext_aug_lr3e5_sd_20261025_162020_159868`. This single-seed comparison does not show a clear benefit from stochastic depth; retain the control as the current local candidate. At epoch 20, train/validation accuracy was 83.7%/63.1% for the control and 83.2%/63.9% for stochastic depth. Validation deterioration persists in both.
+
+Measured epoch times were 516.0-1164.2 seconds for the control and 514.9-614.9 seconds for stochastic depth, excluding checkpoint writing and startup. These timings do not establish a speed advantage because laptop load and operating conditions were not controlled. Peak allocated memory was 1407.2 MiB and 1405.1 MiB, respectively.
+
+Preserve old runs and do not commit local log files. The SD checkpoint records model name `ConvNeXtTinySD`; the current `predict.py` model registry does not yet support it and must be extended before evaluating an SD checkpoint.
+
+## Training-input inspection
+
+`inspect_training_inputs.py` uses the actual training loader and affine transform on CPU. With seed 42, it selects four distinct training patients per class and one slice per patient, displaying each original alongside two augmented versions using a fixed [0,1] grayscale display range. It writes a PNG, image statistics and sampling metadata into ignored `local_data/diagnostics/` timestamped directories. No validation or test images are read, and no dataset files are modified. These small samples cannot establish dataset-wide anatomical orientation or preprocessing consistency.
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py inspect_training_inputs.py
+```
+
+The generated MRI preview and row-index statistics are private inspection artifacts; do not commit them to the public repository.
 
 ## Remaining work
 
