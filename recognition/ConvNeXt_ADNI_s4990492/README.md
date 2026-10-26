@@ -475,7 +475,7 @@ cat rgb224_scratch_10ep.log
 cat rgb224_imagenet_10ep.log
 ```
 
-Each invocation creates a separate run. Do not commit logs, weights or private runtime outputs. No test data are read. Report results as a single-seed comparison under this specific recipe; improvement is not guaranteed.
+Each invocation creates a separate run. Do not commit logs, weights or private runtime outputs. This training script reads no test data. Report results as a single-seed comparison under this specific recipe; improvement is not guaranteed.
 
 ### Results and interpretation
 
@@ -492,7 +492,7 @@ Run identifiers:
 
 At the selected checkpoints, ImageNet initialization increased validation accuracy by approximately 3.1 percentage points, but increased validation loss and reduced AD recall by approximately 25.4 percentage points. This is a mixed outcome, not an improvement on every metric. Training accuracy reached 87.9% in the first pretrained epoch versus 60.8% from scratch, supporting faster fitting under this recipe. By epoch 10, train/validation accuracy was 99.5%/76.7% for ImageNet and 81.1%/66.2% for random initialization.
 
-The ImageNet run's highest logged validation accuracy was 79.8% at epoch 4 (validation loss 0.8884). This is an exploratory trajectory observation, not the selected-checkpoint result. The trainer saves only improvements in validation loss, so it did not save the epoch-4 weights. Checkpoint selection was not changed retrospectively. No final test performance is reported.
+The ImageNet run's highest logged validation accuracy was 79.8% at epoch 4 (validation loss 0.8884). This is an exploratory trajectory observation, not the selected-checkpoint result. The trainer saves only improvements in validation loss, so it did not save the epoch-4 weights. Checkpoint selection was not changed retrospectively. At this experiment stage no test results had been used; the later fixed final evaluation is reported below.
 
 Peak allocated memory was approximately 1204.5 MiB in both arms. Epoch times varied substantially; the observations do not establish a controlled hardware speed comparison. Accuracy and cross-entropy can move in different directions because cross-entropy also depends on confidence. Per-slice probability inspection is needed before attributing the loss increase to particular high-confidence errors. This single-seed result is specific to the fixed split and recipe.
 
@@ -534,7 +534,7 @@ Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546
 
 Under this single-seed, equal-five-epoch comparison, the lower LR improved selected validation accuracy by about 2.7 percentage points and AD recall by about 12.4 points, while reducing NC recall by about 7.0 points. Validation loss decreased by approximately 0.04228. The prior run's first-five-epoch selection is also its full-ten-epoch selection. Its peak logged accuracy of 79.8% at epoch 4 remains an unselected trajectory observation, not an available loss-selected checkpoint.
 
-The lower-LR run ended with train/validation accuracy of 97.1%/75.0% and validation loss 0.7955; continued fitting did not improve on epoch 3. Logged epoch times sum to 2568.7 seconds (about 42.8 minutes, excluding startup and checkpoint-writing overhead); peak allocated memory was 1204.5 MiB. This is the highest reported accuracy among our loss-selected ConvNeXt checkpoints so far, but it does not establish superiority across all metrics or seeds. The scratch RGB224 control still has lower selected validation loss (0.565854). No test evaluation has been performed. The selected epoch-3 checkpoint has subsequently passed full validation reproduction.
+The lower-LR run ended with train/validation accuracy of 97.1%/75.0% and validation loss 0.7955; continued fitting did not improve on epoch 3. Logged epoch times sum to 2568.7 seconds (about 42.8 minutes, excluding startup and checkpoint-writing overhead); peak allocated memory was 1204.5 MiB. This is the highest reported accuracy among our loss-selected ConvNeXt checkpoints so far, but it does not establish superiority across all metrics or seeds. The scratch RGB224 control still has lower selected validation loss (0.565854). At this experiment stage test evaluation had not been performed; see the later fixed final evaluation below. The selected epoch-3 checkpoint has subsequently passed full validation reproduction.
 
 
 ## RGB224 checkpoint validation: reproduced
@@ -551,7 +551,7 @@ cat rgb224_lr3e6_validation.log
 
 Syntax was checked, and the student completed full GPU evaluation: validation loss difference was 0.0 and accuracy matched the training log. Do not commit runtime predictions or logs. The script reuses the existing classification metric functions in `predict.py` without running its CLI.
 
-The verified checkpoint is epoch 3, SHA256 `6b89086579452034b671dff60844f8416829bce60a6fb9a6c23609a877425cd5`. Evaluation used all 4,580 validation slices from 101 patients, with manifest SHA256 `0a9dff42f564228558cdb4a7cd5706bf15a48a9bebb2fdfcad1f863ff59f80b3`. Loss was 0.6428447342546877, exactly matching the saved training value. These are validation results, not final test results.
+The verified checkpoint is epoch 3, SHA256 `6b89086579452034b671dff60844f8416829bce60a6fb9a6c23609a877425cd5`. Evaluation used all 4,580 validation slices from 101 patients, with manifest SHA256 `0a9dff42f564228558cdb4a7cd5706bf15a48a9bebb2fdfcad1f863ff59f80b3`. Loss was 0.6428447342546877, exactly matching the saved training value. These are validation results; the separate final test evaluation is reported below.
 
 | Metric | Verified validation result |
 |---|---:|
@@ -562,7 +562,7 @@ The verified checkpoint is epoch 3, SHA256 `6b89086579452034b671dff60844f8416829
 | NC precision / recall / F1 | 0.728027 / 0.846491 / 0.782803 |
 | AD precision / recall / F1 | 0.818559 / 0.686522 / 0.746749 |
 
-Confusion matrix (rows=true, columns=predicted; order NC, AD): `[[1930,350],[721,1579]]`. There were 1,071 incorrect slice predictions, including 721 AD-to-NC errors and 350 NC-to-AD errors. AD recall therefore remains an important limitation despite higher overall validation accuracy. Probabilities are uncalibrated. Any decision-threshold exploration must use validation data only and report the sensitivity/specificity trade-off; AUROC does not guarantee an operating threshold achieving 80% accuracy. Final test data remain held out.
+Confusion matrix (rows=true, columns=predicted; order NC, AD): `[[1930,350],[721,1579]]`. There were 1,071 incorrect slice predictions, including 721 AD-to-NC errors and 350 NC-to-AD errors. AD recall therefore remains an important limitation despite higher overall validation accuracy. Probabilities are uncalibrated. Any decision-threshold exploration must use validation data only and report the sensitivity/specificity trade-off; AUROC does not guarantee an operating threshold achieving 80% accuracy. Test data were held out during this validation analysis; the subsequent fixed final evaluation is reported below.
 
 
 ## Verified RGB224 validation threshold exploration
@@ -625,11 +625,11 @@ A separate bounded pipeline processed the first 256 validation images at batch s
 
 The measurements support execution feasibility on the available laptop GPU, while validation error rates, AD recall and uncalibrated high-confidence errors remain the principal model limitations. A matched local baseline profile is still needed before claiming a speed or resource advantage over the baseline.
 
-## Fixed final evaluation protocol (test inference pending)
+## Fixed final evaluation protocol and completed main-model test
 
 `final_evaluation_protocol.json` records the selected RGB224 ImageNet checkpoint (epoch 3, LR 3e-6), its verified SHA256 and the three fixed local manifest hashes. Primary test predictions use the default 0.50 decision threshold; 0.21 is a predeclared supplementary threshold derived from validation exploration. Both results must be reported regardless of their ordering. Test outcomes must not be used to revise the model, threshold or split.
 
-`evaluate_rgb224_test.py` verifies checkpoint identity, prior validation reproduction, manifest hashes, population counts and pairwise patient/scan/path separation. It evaluates all 4580 held-out test slices from 104 patients with deterministic RGB224 preprocessing, then saves both metric sets, predictions and the protocol snapshot under the ignored run directory `final_test_evaluation/`. Existing evaluation directories are not overwritten. Syntax has passed; test inference has not been executed by Codex.
+`evaluate_rgb224_test.py` verifies checkpoint identity, prior validation reproduction, manifest hashes, population counts and pairwise patient/scan/path separation. It evaluates all 4580 held-out test slices from 104 patients with deterministic RGB224 preprocessing, then saves both metric sets, predictions and the protocol snapshot under the ignored run directory `final_test_evaluation/`. Existing evaluation directories are not overwritten. Syntax passed; the student subsequently completed main-model test inference under the fixed protocol, with results below.
 
 ```powershell
 $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
@@ -639,12 +639,35 @@ cat rgb224_final_test.log
 
 The baseline remains the validation-loss-selected SimpleCNN epoch 9 from `baseline_20261022_211305_056381`. Its checkpoint is not present in the local runs directory and must be retrieved from the student's remote project before baseline test evaluation and matched local profiling. Baseline inference must retain its original single-channel preprocessing; its earlier validation result is not a substitute for a test result. The main-model evaluation does not complete the final baseline comparison.
 
+### Main-model held-out test results
+
+The student evaluated the predefined epoch-3 checkpoint on all 4,580 held-out test slices from 104 patients. Protocol SHA256: `cc1467bf2427a95ba60fc4a784aee3b1b717e7e8274cf933be6b8295838dad92`; test manifest SHA256: `837bde3a34eaac673ffc4a4331214051c159aed44a2e4e4a03cfbb8941189f11`. Test cross-entropy loss was 0.45708363340947955. No confidence-based sample filtering was used.
+
+| Metric | Primary threshold 0.50 | Supplementary threshold 0.21 |
+|---|---:|---:|
+| Accuracy | 81.7686% | 79.9782% |
+| Balanced accuracy | 81.4166% | 80.5384% |
+| Macro-F1 | 0.815163 | 0.799655 |
+| AUROC (AD positive) | 0.903406 | 0.903406 |
+| NC precision | 0.824663 | 0.868506 |
+| NC recall | 0.849206 | 0.749603 |
+| NC F1 | 0.836755 | 0.804686 |
+| AD precision | 0.808564 | 0.737630 |
+| AD recall | 0.779126 | 0.861165 |
+| AD F1 | 0.793572 | 0.794625 |
+
+Primary confusion matrix (rows=true, columns=predicted; NC, AD): `[[2140,380],[455,1605]]`. The primary result correctly classified 3,745/4,580 slices and exceeds the numerical 80% slice-accuracy target under our disclosed patient-independent re-split protocol. It does not imply that all coursework requirements are complete or that the original folder split was used.
+
+Supplementary confusion matrix: `[[1889,631],[286,1774]]`. The validation-derived threshold reduces AD false negatives from 455 to 286 but increases NC false positives from 380 to 631. Its accuracy is below 80% before rounding and must not be represented as meeting the target. Both thresholds were specified before test evaluation; the primary threshold was not selected retrospectively. AUROC is identical because the underlying probability ranking is unchanged. No further model, split or threshold tuning will use these test outcomes.
+
+Test accuracy is higher than validation accuracy (76.6157% at the default threshold). Different held-out patient groups can produce different observed performance; this single split does not establish the cause or external generalisation. Slices from a patient are correlated, so independent-slice uncertainty estimates would be inappropriate. Probabilities remain uncalibrated. Baseline test evaluation and matched local baseline profiling are still pending.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
 - Prioritize slice-level confidence analysis for the self-implemented models; defer patient aggregation. The unused prebuilt-model experiment scripts have been removed.
 - Extend the validated inference pipeline with private per-sample prediction export, final evaluation and visualizations.
-- Perform held-out slice-level evaluation after model and operating-rule selection; patient aggregation is optional.
+- Main-model held-out slice-level evaluation is complete; retrieve and evaluate the preselected SimpleCNN baseline on the same test split, without retuning.
 - Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
 - Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
 - Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
