@@ -662,6 +662,22 @@ Supplementary confusion matrix: `[[1889,631],[286,1774]]`. The validation-derive
 
 Test accuracy is higher than validation accuracy (76.6157% at the default threshold). Different held-out patient groups can produce different observed performance; this single split does not establish the cause or external generalisation. Slices from a patient are correlated, so independent-slice uncertainty estimates would be inappropriate. Probabilities remain uncalibrated. Baseline test evaluation and matched local baseline profiling are still pending.
 
+## Final baseline evaluation (awaiting checkpoint retrieval)
+
+`evaluate_baseline_final.py` expects the preselected remote checkpoint at `runs/baseline_20261022_211305_056381/best_baseline.pth`. It checks model identity, epoch 9, recorded validation loss and split hashes/separation, and uses the original single-channel, original-size [0,1] preprocessing. RGB224 preprocessing must not be substituted.
+
+Before test inference, the script reproduces full validation results. It requires the original confusion matrix `[[1737,543],[658,1642]]` and loss within 1e-5 of 0.5258350444315042. A mismatch stops execution before test images are loaded. The tolerance allows small numerical differences between the original remote and local software/hardware; a failure needs investigation, not test-driven adjustment. No historical baseline checkpoint hash was recorded, so the new hash identifies the retrieved artifact without proving archived historical identity.
+
+After this gate passes, it evaluates the same fixed test split at threshold 0.50 and saves metrics and private row-index predictions under `final_baseline_evaluation/`. Existing output is preserved. Syntax has passed; checkpoint retrieval and GPU evaluation remain pending. Download the original `config.json` and `training_log.csv` alongside the checkpoint for provenance; the evaluator uses metadata embedded in the checkpoint.
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u evaluate_baseline_final.py 2>&1 | Tee-Object -FilePath baseline_final_evaluation.log
+cat baseline_final_evaluation.log
+```
+
+Do not commit the checkpoint, logs or private predictions. Baseline test results and local baseline resource profiling remain outstanding.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
