@@ -625,6 +625,20 @@ A separate bounded pipeline processed the first 256 validation images at batch s
 
 The measurements support execution feasibility on the available laptop GPU, while validation error rates, AD recall and uncalibrated high-confidence errors remain the principal model limitations. A matched local baseline profile is still needed before claiming a speed or resource advantage over the baseline.
 
+## Fixed final evaluation protocol (test inference pending)
+
+`final_evaluation_protocol.json` records the selected RGB224 ImageNet checkpoint (epoch 3, LR 3e-6), its verified SHA256 and the three fixed local manifest hashes. Primary test predictions use the default 0.50 decision threshold; 0.21 is a predeclared supplementary threshold derived from validation exploration. Both results must be reported regardless of their ordering. Test outcomes must not be used to revise the model, threshold or split.
+
+`evaluate_rgb224_test.py` verifies checkpoint identity, prior validation reproduction, manifest hashes, population counts and pairwise patient/scan/path separation. It evaluates all 4580 held-out test slices from 104 patients with deterministic RGB224 preprocessing, then saves both metric sets, predictions and the protocol snapshot under the ignored run directory `final_test_evaluation/`. Existing evaluation directories are not overwritten. Syntax has passed; test inference has not been executed by Codex.
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u evaluate_rgb224_test.py 2>&1 | Tee-Object -FilePath rgb224_final_test.log
+cat rgb224_final_test.log
+```
+
+The baseline remains the validation-loss-selected SimpleCNN epoch 9 from `baseline_20261022_211305_056381`. Its checkpoint is not present in the local runs directory and must be retrieved from the student's remote project before baseline test evaluation and matched local profiling. Baseline inference must retain its original single-channel preprocessing; its earlier validation result is not a substitute for a test result. The main-model evaluation does not complete the final baseline comparison.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
