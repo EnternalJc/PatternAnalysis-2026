@@ -720,6 +720,20 @@ This is a comparison of complete prediction pipelines, not an isolated architect
 
 The baseline test artifacts are saved privately under `runs/baseline_20261022_211305_056381/final_baseline_evaluation/`. Its retrieved checkpoint SHA256 is `593339ff8dd1dc992c55db6412611531bd347d3b30c04f76bf395d4f99a94e93`. Local baseline timing and memory profiling remain to be completed before a resource comparison is made.
 
+## Baseline resource profiling (prepared, execution pending)
+
+`profile_baseline.py` verifies the retrieved epoch-9 checkpoint hash and validation manifest against the completed baseline evaluation. It uses the same timing procedure as `inspect_rgb224_candidate.py --mode profile`: float32 on the local GPU, batch sizes 1 and 8, 10 warmup batches, 50 synchronized forward measurements, and a separate 256-image validation pipeline measurement at batch size 8. The baseline retains its original-size single-channel [0,1] preprocessing. No test images are used and no parameters are updated.
+
+The resulting comparison measures the two actual prediction pipelines, including their different input dimensions and preprocessing; it is not an architecture-only speed experiment. Laptop power/load and OS cache remain uncontrolled across sessions. Syntax has been checked; measured values remain pending. Outputs are preserved under `runs/baseline_20261022_211305_056381/validation_baseline_profile/`.
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u profile_baseline.py 2>&1 | Tee-Object -FilePath baseline_profile.log
+cat baseline_profile.log
+```
+
+Run with no concurrent training or GPU workload. Do not commit runtime logs or private run directories.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
