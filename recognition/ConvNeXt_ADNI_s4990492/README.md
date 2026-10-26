@@ -525,7 +525,7 @@ Weights are reused from the verified D:/codex cache. Separate run names include 
 
 ### Completed lower-LR results
 
-Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546877, validation accuracy 76.6%, NC recall 84.6% and AD recall 68.7%. Percentages are rounded log values; checkpoint inference and detailed metric reproduction remain pending. Run identifier: `local_rgb224_lr3e6_imagenet_20261026_201343_178908`, subsequently supplied by the student and matched to the local configuration.
+Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546877, validation accuracy 76.6%, NC recall 84.6% and AD recall 68.7%. Percentages in the training comparison are rounded log values; full checkpoint validation subsequently reproduced loss and accuracy exactly, as reported below. Run identifier: `local_rgb224_lr3e6_imagenet_20261026_201343_178908`, subsequently supplied by the student and matched to the local configuration.
 
 | ImageNet fine-tuning LR | Comparison budget | Loss-selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
 |---|---|---:|---:|---:|---:|---:|
@@ -534,10 +534,10 @@ Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546
 
 Under this single-seed, equal-five-epoch comparison, the lower LR improved selected validation accuracy by about 2.7 percentage points and AD recall by about 12.4 points, while reducing NC recall by about 7.0 points. Validation loss decreased by approximately 0.04228. The prior run's first-five-epoch selection is also its full-ten-epoch selection. Its peak logged accuracy of 79.8% at epoch 4 remains an unselected trajectory observation, not an available loss-selected checkpoint.
 
-The lower-LR run ended with train/validation accuracy of 97.1%/75.0% and validation loss 0.7955; continued fitting did not improve on epoch 3. Logged epoch times sum to 2568.7 seconds (about 42.8 minutes, excluding startup and checkpoint-writing overhead); peak allocated memory was 1204.5 MiB. This is the highest reported accuracy among our loss-selected ConvNeXt checkpoints so far, but it does not establish superiority across all metrics or seeds. The scratch RGB224 control still has lower selected validation loss (0.565854). No test evaluation has been performed. Next, reproduce the selected epoch-3 checkpoint's full validation metrics before another training change.
+The lower-LR run ended with train/validation accuracy of 97.1%/75.0% and validation loss 0.7955; continued fitting did not improve on epoch 3. Logged epoch times sum to 2568.7 seconds (about 42.8 minutes, excluding startup and checkpoint-writing overhead); peak allocated memory was 1204.5 MiB. This is the highest reported accuracy among our loss-selected ConvNeXt checkpoints so far, but it does not establish superiority across all metrics or seeds. The scratch RGB224 control still has lower selected validation loss (0.565854). No test evaluation has been performed. The selected epoch-3 checkpoint has subsequently passed full validation reproduction.
 
 
-## RGB224 checkpoint validation (pending execution)
+## RGB224 checkpoint validation: reproduced
 
 `evaluate_rgb224_validation.py` defaults to the lower-LR run `local_rgb224_lr3e6_imagenet_20261026_201343_178908`. It checks the checkpoint model, preprocessing configuration, train/validation manifest hashes and patient/scan/path separation. It verifies that the saved epoch matches the minimum validation-loss entry in the training log, then performs full validation inference using RGB224 preprocessing without augmentation and the recorded batch size.
 
@@ -549,7 +549,21 @@ $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
 cat rgb224_lr3e6_validation.log
 ```
 
-Syntax has been checked; full GPU evaluation remains for the student to run. Do not commit runtime predictions or logs. The script reuses the existing classification metric functions in `predict.py` without running its CLI.
+Syntax was checked, and the student completed full GPU evaluation: validation loss difference was 0.0 and accuracy matched the training log. Do not commit runtime predictions or logs. The script reuses the existing classification metric functions in `predict.py` without running its CLI.
+
+The verified checkpoint is epoch 3, SHA256 `6b89086579452034b671dff60844f8416829bce60a6fb9a6c23609a877425cd5`. Evaluation used all 4,580 validation slices from 101 patients, with manifest SHA256 `0a9dff42f564228558cdb4a7cd5706bf15a48a9bebb2fdfcad1f863ff59f80b3`. Loss was 0.6428447342546877, exactly matching the saved training value. These are validation results, not final test results.
+
+| Metric | Verified validation result |
+|---|---:|
+| Accuracy | 0.7661572052401747 |
+| Balanced accuracy | 0.766506483600305 |
+| Macro-F1 | 0.7647756586411514 |
+| AUROC (AD positive) | 0.8613848207475209 |
+| NC precision / recall / F1 | 0.728027 / 0.846491 / 0.782803 |
+| AD precision / recall / F1 | 0.818559 / 0.686522 / 0.746749 |
+
+Confusion matrix (rows=true, columns=predicted; order NC, AD): `[[1930,350],[721,1579]]`. There were 1,071 incorrect slice predictions, including 721 AD-to-NC errors and 350 NC-to-AD errors. AD recall therefore remains an important limitation despite higher overall validation accuracy. Probabilities are uncalibrated. Any decision-threshold exploration must use validation data only and report the sensitivity/specificity trade-off; AUROC does not guarantee an operating threshold achieving 80% accuracy. Final test data remain held out.
+
 
 ## Remaining work
 
