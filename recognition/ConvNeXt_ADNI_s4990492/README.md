@@ -623,7 +623,7 @@ The verified epoch-3 checkpoint (SHA256 `6b89086579452034b671dff60844f8416829bce
 
 A separate bounded pipeline processed the first 256 validation images at batch size 8 in 1.2871001 seconds, averaging 5.027735 ms per slice (approximately 199 slices/second in this measurement). This includes image reading, RGB224 preprocessing, transfers, model forward, softmax and CPU probability copy, but excludes model loading, metric computation and file export. OS caching was uncontrolled. This is one local measurement, not a cold-start or deployment latency guarantee. Batch-8 amortized time is not single-image request latency; peak allocated memory is not total device memory.
 
-The measurements support execution feasibility on the available laptop GPU, while validation error rates, AD recall and uncalibrated high-confidence errors remain the principal model limitations. A matched local baseline profile is still needed before claiming a speed or resource advantage over the baseline.
+The measurements support execution feasibility on the available laptop GPU, while validation error rates, AD recall and uncalibrated high-confidence errors remain the principal model limitations. The local baseline profile and descriptive resource comparison are reported below; separate-session timing is not a controlled speed guarantee.
 
 ## Fixed final evaluation protocol and completed main-model test
 
@@ -660,7 +660,7 @@ Primary confusion matrix (rows=true, columns=predicted; NC, AD): `[[2140,380],[4
 
 Supplementary confusion matrix: `[[1889,631],[286,1774]]`. The validation-derived threshold reduces AD false negatives from 455 to 286 but increases NC false positives from 380 to 631. Its accuracy is below 80% before rounding and must not be represented as meeting the target. Both thresholds were specified before test evaluation; the primary threshold was not selected retrospectively. AUROC is identical because the underlying probability ranking is unchanged. No further model, split or threshold tuning will use these test outcomes.
 
-Test accuracy is higher than validation accuracy (76.6157% at the default threshold). Different held-out patient groups can produce different observed performance; this single split does not establish the cause or external generalisation. Slices from a patient are correlated, so independent-slice uncertainty estimates would be inappropriate. Probabilities remain uncalibrated. Baseline test evaluation is complete below; matched local baseline profiling remains pending.
+Test accuracy is higher than validation accuracy (76.6157% at the default threshold). Different held-out patient groups can produce different observed performance; this single split does not establish the cause or external generalisation. Slices from a patient are correlated, so independent-slice uncertainty estimates would be inappropriate. Probabilities remain uncalibrated. Baseline test evaluation is complete below; the local baseline resource comparison is reported below.
 
 ## Final baseline evaluation: completed
 
@@ -676,7 +676,7 @@ $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
 cat baseline_final_evaluation.log
 ```
 
-Do not commit the checkpoint, logs or private predictions. Baseline test results are reported below; local baseline resource profiling remains outstanding.
+Do not commit the checkpoint, logs or private predictions. Baseline test results are reported below; local baseline resource profiling is completed below.
 
 ### Baseline cross-environment validation diagnostic
 
@@ -718,13 +718,13 @@ Baseline confusion matrix (rows=true, columns=predicted; NC, AD): `[[1864,656],[
 
 This is a comparison of complete prediction pipelines, not an isolated architecture ablation: the main model uses ImageNet initialization and RGB224 normalization, while the baseline was trained from scratch on original-size grayscale inputs, with different training settings. The matched initialization experiments earlier in this report address initialization separately on validation data. The final accuracy difference cannot be attributed solely to the ConvNeXt architecture or solely to pretraining. No claim of clinical readiness follows from these results.
 
-The baseline test artifacts are saved privately under `runs/baseline_20261022_211305_056381/final_baseline_evaluation/`. Its retrieved checkpoint SHA256 is `593339ff8dd1dc992c55db6412611531bd347d3b30c04f76bf395d4f99a94e93`. Local baseline timing and memory profiling remain to be completed before a resource comparison is made.
+The baseline test artifacts are saved privately under `runs/baseline_20261022_211305_056381/final_baseline_evaluation/`. Its retrieved checkpoint SHA256 is `593339ff8dd1dc992c55db6412611531bd347d3b30c04f76bf395d4f99a94e93`. Local baseline timing and memory profiling are completed in the resource comparison below.
 
-## Baseline resource profiling (prepared, execution pending)
+## Baseline resource profiling: completed
 
 `profile_baseline.py` verifies the retrieved epoch-9 checkpoint hash and validation manifest against the completed baseline evaluation. It uses the same timing procedure as `inspect_rgb224_candidate.py --mode profile`: float32 on the local GPU, batch sizes 1 and 8, 10 warmup batches, 50 synchronized forward measurements, and a separate 256-image validation pipeline measurement at batch size 8. The baseline retains its original-size single-channel [0,1] preprocessing. No test images are used and no parameters are updated.
 
-The resulting comparison measures the two actual prediction pipelines, including their different input dimensions and preprocessing; it is not an architecture-only speed experiment. Laptop power/load and OS cache remain uncontrolled across sessions. Syntax has been checked; measured values remain pending. Outputs are preserved under `runs/baseline_20261022_211305_056381/validation_baseline_profile/`.
+The resulting comparison measures the two actual prediction pipelines, including their different input dimensions and preprocessing; it is not an architecture-only speed experiment. Laptop power/load and OS cache remain uncontrolled across sessions. Syntax was checked; the student completed the GPU measurements reported below. Outputs are preserved under `runs/baseline_20261022_211305_056381/validation_baseline_profile/`.
 
 ```powershell
 $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
@@ -734,13 +734,33 @@ cat baseline_profile.log
 
 Run with no concurrent training or GPU workload. Do not commit runtime logs or private run directories.
 
+## Accuracy and resource trade-off
+
+Both models were profiled on the NVIDIA GeForce RTX 4050 Laptop GPU with PyTorch 2.11.0+cu128, float32, 10 warmup batches and 50 timed forward batches. Each keeps its own training-time preprocessing. The measurements were taken in separate sessions, so power/load and caching differences limit causal speed comparisons.
+
+| Measurement | SimpleCNN | Custom ConvNeXt RGB |
+|---|---:|---:|
+| Parameters | 23,426 | 27,821,666 |
+| Test accuracy, primary threshold | 71.1572% | 81.7686% |
+| Batch-1 median forward | 0.2744 ms | 6.8982 ms |
+| Batch-8 median forward per batch | 2.1767 ms | 24.3770 ms |
+| Batch-8 amortized forward per slice | 0.2721 ms | 3.0471 ms |
+| Batch-1 peak allocated GPU memory | 16.95 MiB | 129.90 MiB |
+| Batch-8 peak allocated GPU memory | 71.09 MiB | 212.61 MiB |
+| 256-image pipeline elapsed time | 0.2063843 s | 1.2871001 s |
+| Pipeline average per slice | 0.8062 ms | 5.0277 ms |
+
+The baseline is substantially smaller and faster in these measurements. ConvNeXt improves test accuracy by 10.6114 percentage points at higher computational cost; its measured batch-8 forward cost is approximately 11.2 times the baseline's. Both fit within the available laptop GPU memory. These are observations of complete pipelines, not an architecture-only benchmark or a single-request latency estimate derived from batching. Peak allocated memory is not total GPU memory, and pipeline timings exclude model startup and output writing.
+
+For this coursework's predictive-performance objective, the fixed ConvNeXt candidate is the stronger tested pipeline and exceeds the numerical 80% slice-accuracy target under the disclosed re-split protocol. The SimpleCNN remains a useful low-resource reference. Neither pipeline is established as suitable for autonomous clinical diagnosis: the primary ConvNeXt still misses 455 AD test slices, probabilities are uncalibrated, and no external validation is available. Any proposed human-review workflow must report coverage and residual errors rather than substitute selective accuracy for full-set accuracy.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
 - Prioritize slice-level confidence analysis for the self-implemented models; defer patient aggregation. The unused prebuilt-model experiment scripts have been removed.
 - Extend the validated inference pipeline with private per-sample prediction export, final evaluation and visualizations.
-- Main-model and preselected SimpleCNN held-out evaluation are complete; keep models and operating rules fixed and complete matched local resource profiling and final reporting.
-- Analyse calibration/referral thresholds, profile inference latency and examine 3-5 real failures with figures.
+- Main-model and baseline held-out evaluation and local profiling are complete; keep models and operating rules fixed and finish report integration.
+- Integrate completed validation confidence/referral analysis, five failure examples and measured inference resources into the final report.
 - Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
 - Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
 
