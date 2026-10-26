@@ -565,6 +565,29 @@ The verified checkpoint is epoch 3, SHA256 `6b89086579452034b671dff60844f8416829
 Confusion matrix (rows=true, columns=predicted; order NC, AD): `[[1930,350],[721,1579]]`. There were 1,071 incorrect slice predictions, including 721 AD-to-NC errors and 350 NC-to-AD errors. AD recall therefore remains an important limitation despite higher overall validation accuracy. Probabilities are uncalibrated. Any decision-threshold exploration must use validation data only and report the sensitivity/specificity trade-off; AUROC does not guarantee an operating threshold achieving 80% accuracy. Final test data remain held out.
 
 
+## Verified RGB224 validation threshold exploration
+
+Codex ran `analyse_rgb224_confidence.py` on the saved epoch-3 validation predictions and checked the generated figure. The script verifies the validation manifest hash, row ordering, labels, probability/decision consistency and baseline accuracy. It reads no test data and performs no model inference. Outputs remain private under the run's `validation_rgb224_confidence/` directory, with existing directories preserved.
+
+An exploratory fixed grid of AD thresholds 0.10 through 0.90 in increments of 0.01 classifies every slice as AD when p(AD) > threshold. Ranking uses validation accuracy, then proximity to 0.5, then the lower threshold. The grid maximum was at 0.21:
+
+| AD threshold | Slices evaluated | Accuracy | NC recall | AD recall | NC-to-AD errors | AD-to-NC errors |
+|---|---:|---:|---:|---:|---:|---:|
+| 0.50 (default) | 4580 | 76.6157% | 84.6491% | 68.6522% | 350 | 721 |
+| 0.21 (exploratory grid maximum) | 4580 | 78.1659% | 77.1930% | 79.1304% | 520 | 480 |
+
+The 0.21 threshold corrects a net 71 additional predictions, with fewer AD false negatives but more NC false positives. This is a validation-tuned observation, not an unbiased performance estimate or a locked operating rule. It does not reach 80% on this grid and does not guarantee test improvement. Default-threshold and tuned-threshold results must remain clearly distinguished; any final operating rule must be fixed before test evaluation.
+
+With the original 0.50 decisions, top-label ECE over 10 equal-width bins in [0,1] was 0.1402141 and binary Brier score was 0.1833502. Confidence >=0.80 retained 3725/4580 slices (81.33% coverage), with 81.50% retained accuracy and 855 slices referred. Confidence >=0.90 retained 3250 slices (70.96% coverage), with 84.43% retained accuracy but still 506 errors (346 AD-to-NC and 160 NC-to-AD). Referral accuracy is conditional on selection and cannot replace full-test slice accuracy. These referral calculations do not apply the exploratory 0.21 classification threshold. Probabilities remain uncalibrated, and slice dependence within patients limits naive uncertainty estimates.
+
+The analysis has already completed; no rerun is needed. To reproduce on a fresh export directory:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py analyse_rgb224_confidence.py 2>&1 | Tee-Object -FilePath rgb224_confidence.log
+cat rgb224_confidence.log
+```
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
