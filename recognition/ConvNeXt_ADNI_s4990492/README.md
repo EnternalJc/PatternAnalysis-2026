@@ -444,38 +444,59 @@ cat local_compact_20ep.log
 
 Each invocation creates a new run directory; smoke checks save no checkpoint. Full checkpoints retain the filename `best_convnext.pth` but record model `ConvNeXtCompact` in their configuration. Existing inference tools must be extended explicitly before loading these checkpoints; do not load them as ConvNeXtTiny. Compare the selected epoch against the local fixed-LR control (validation loss 0.561936, accuracy 70.0873%). Do not commit logs, model weights or runtime predictions. No test data are read by this trainer.
 
-## Matched initialization comparison (execution pending)
+## Matched initialization comparison: completed 10-epoch runs
 
 Teaching-team correspondence supplied by the student allows official ImageNet weights to be loaded into a self-defined ConvNeXt when the source is cited and results are compared with training from scratch. Direct use of a prebuilt model as the submitted architecture remains disallowed. `modules.py` now defines `ConvNeXtTinyRGB`, extending the existing custom implementation with a three-channel stem; the original single-channel model remains unchanged.
 
 `dataset_rgb224.py` applies grayscale conversion, aspect-preserving bilinear resize with black padding to 224x224, training-only affine augmentation, RGB replication, and normalization with means [0.485,0.456,0.406] and standard deviations [0.229,0.224,0.225]. This is used identically in both arms, with deterministic validation preprocessing. RGB replication introduces no new MRI information. There is no center crop.
 
-`train_convnext_local_initialization.py` requires `--initialization scratch` or `--initialization imagenet`. Both arms use the same fixed patient manifests, seed 42, 20 epochs, batch size 8, AdamW LR 3e-5, weight decay 0.05, full precision, no stochastic depth and minimum validation-loss checkpoint selection. All layers are trainable. The ImageNet arm changes only the backbone initialization; the binary classifier is initialized identically. The previous single-channel experiments are historical context, not a matched initialization control.
+`train_convnext_local_initialization.py` requires `--initialization scratch` or `--initialization imagenet`. Both arms use the same fixed patient manifests, seed 42, 10 epochs, batch size 8, AdamW LR 3e-5, weight decay 0.05, full precision, no stochastic depth and minimum validation-loss checkpoint selection. All layers are trainable. The ImageNet arm changes only the backbone initialization; the binary classifier is initialized identically. The previous single-channel experiments are historical context, not a matched initialization control.
 
 Official weight source: [torchvision ConvNeXt-Tiny IMAGENET1K_V1](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.convnext_tiny.html); [weight file](https://download.pytorch.org/models/convnext_tiny-983f1562.pth). `imagenet_weight_mapping.py` uses the weight state dictionary without constructing a prebuilt training model. It checks full key coverage and shapes, maps 180 tensors, discards the two ImageNet head tensors and preserves the custom binary head. Download/hash verification uses the official filename hash prefix; the complete SHA256 is recorded in the run configuration. Cached files are checked as well. Default cache: `D:/codex/cache/torch/checkpoints`, outside the repository. No classmate checkpoint or training code is used.
 
-CPU verification uses random reference weights to check mapping, unchanged binary-head weights, output parity, finite gradients and deterministic RGB224 preprocessing. Official download/loading and GPU smoke must pass before a full run. Smoke runs process partial batches only and save no checkpoint. Never interpret their accuracy as performance. Model name `ConvNeXtTinyRGB` and preprocessing are recorded; existing single-channel inference scripts must be extended before evaluating these checkpoints.
+The student ran `check_imagenet_mapping.py` successfully: all 180 backbone tensors mapped, the binary head was preserved, synthetic reference outputs matched and gradients were finite. Both GPU smoke checks subsequently passed. Official weights loaded with SHA256 `983f1562536e84ff750a1576fb08e54de751dbf2e17c0d8a4a13704341fdcd3d`. These checks do not establish generalisation or probability calibration. Smoke runs process partial batches only and save no checkpoint. Never interpret their accuracy as performance. Model name `ConvNeXtTinyRGB` and preprocessing are recorded; existing single-channel inference scripts must be extended before evaluating these checkpoints.
 
 From the project directory in PowerShell, run these sequentially, checking each exit/output before proceeding:
 
 ```powershell
 $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
-& $py -u train_convnext_local_initialization.py --model convnext --initialization scratch --epochs 20 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_scratch_smoke.log
+& $py -u train_convnext_local_initialization.py --model convnext --initialization scratch --epochs 10 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_scratch_smoke.log
 cat rgb224_scratch_smoke.log
-& $py -u train_convnext_local_initialization.py --model convnext --initialization imagenet --epochs 20 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_imagenet_smoke.log
+& $py -u train_convnext_local_initialization.py --model convnext --initialization imagenet --epochs 10 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_imagenet_smoke.log
 cat rgb224_imagenet_smoke.log
 ```
 
 The first ImageNet invocation downloads approximately 109 MiB of official weights if absent. After both smoke checks pass, run each full arm separately (no simultaneous training):
 
 ```powershell
-& $py -u train_convnext_local_initialization.py --model convnext --initialization scratch --epochs 20 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_scratch_20ep.log
-cat rgb224_scratch_20ep.log
-& $py -u train_convnext_local_initialization.py --model convnext --initialization imagenet --epochs 20 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_imagenet_20ep.log
-cat rgb224_imagenet_20ep.log
+& $py -u train_convnext_local_initialization.py --model convnext --initialization scratch --epochs 10 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_scratch_10ep.log
+cat rgb224_scratch_10ep.log
+& $py -u train_convnext_local_initialization.py --model convnext --initialization imagenet --epochs 10 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_imagenet_10ep.log
+cat rgb224_imagenet_10ep.log
 ```
 
 Each invocation creates a separate run. Do not commit logs, weights or private runtime outputs. No test data are read. Report results as a single-seed comparison under this specific recipe; improvement is not guaranteed.
+
+### Results and interpretation
+
+The training budget was reduced to 10 epochs per arm at the student's request before the reported runs. Both runs completed. Results below are from student-supplied training logs; percentages are rounded to one decimal place, while the minimum losses are reported at full supplied precision. Minimum validation loss selected epoch 1 in both arms.
+
+| Initialization | Selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
+|---|---:|---:|---:|---:|---:|
+| Random | 1 | 0.5658538799667853 | 70.8% | 59.8% | 81.7% |
+| ImageNet | 1 | 0.6851202758443928 | 73.9% | 91.6% | 56.3% |
+
+Run identifiers:
+- Random: `local_rgb224_scratch_20261026_164828_261146`
+- ImageNet: `local_rgb224_imagenet_20261026_182506_250413`
+
+At the selected checkpoints, ImageNet initialization increased validation accuracy by approximately 3.1 percentage points, but increased validation loss and reduced AD recall by approximately 25.4 percentage points. This is a mixed outcome, not an improvement on every metric. Training accuracy reached 87.9% in the first pretrained epoch versus 60.8% from scratch, supporting faster fitting under this recipe. By epoch 10, train/validation accuracy was 99.5%/76.7% for ImageNet and 81.1%/66.2% for random initialization.
+
+The ImageNet run's highest logged validation accuracy was 79.8% at epoch 4 (validation loss 0.8884). This is an exploratory trajectory observation, not the selected-checkpoint result. The trainer saves only improvements in validation loss, so it did not save the epoch-4 weights. Checkpoint selection was not changed retrospectively. No final test performance is reported.
+
+Peak allocated memory was approximately 1204.5 MiB in both arms. Epoch times varied substantially; the observations do not establish a controlled hardware speed comparison. Accuracy and cross-entropy can move in different directions because cross-entropy also depends on confidence. Per-slice probability inspection is needed before attributing the loss increase to particular high-confidence errors. This single-seed result is specific to the fixed split and recipe.
+
+A lower-learning-rate pretrained experiment has been proposed but has not been implemented or run as part of these results.
 
 ### Split-protocol explanation
 
@@ -495,8 +516,7 @@ The provided original training and test folders shared 216 patients. We pooled t
 
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
-The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files and full validation inference with exact loss reproduction on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files and full validation inference with exact loss reproduction on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. The student also completed the local stochastic-depth, cosine-schedule and reduced-width comparisons, synthetic ImageNet mapping verification, both RGB224 GPU smoke checks, and the matched 10-epoch scratch/ImageNet runs. Codex assisted with their implementation and documentation. Further code understanding, review and empirical validation remain part of the student's responsibility.
 
 
-Execution status: CPU mapping verification was attempted but interrupted while PyTorch import was unresponsive. No passing result is claimed. Run the synthetic diagnostic with: python check_imagenet_mapping.py before GPU smoke. This diagnostic alone instantiates a random torchvision reference; training does not. Official weights have not yet been downloaded.
 
