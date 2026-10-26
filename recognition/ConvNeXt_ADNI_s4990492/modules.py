@@ -174,6 +174,18 @@ class ConvNeXtTiny(nn.Module):
         # Return logits in the order NC, AD.
         return self.classifier(x)
 
+class ConvNeXtTinyRGB(ConvNeXtTiny):
+    """Custom three-channel variant for matched scratch/ImageNet experiments.
+
+    Keeps the custom stages; only the input convolution changes.
+    No prebuilt model is instantiated here.
+    """
+    def __init__(self):
+        super().__init__()
+        self.stem[0] = nn.Conv2d(3, 96, kernel_size=4, stride=4)
+        self._initialize_weights(self.stem[0])
+
+
 if __name__ == "__main__":
     torch.manual_seed(42)
 

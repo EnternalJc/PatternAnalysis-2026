@@ -419,13 +419,13 @@ cat architecture_parity.log
 
 JSON results are saved in a new ignored `runs/architecture_parity_*` directory. Do not commit runtime logs. Codex authored and ran this synthetic check; the coursework training architecture remains student-defined.
 
-## Reduced-width ConvNeXt experiment (pending GPU execution)
+## Reduced-width ConvNeXt experiment
 
 The teaching-team answer supplied by the student explicitly permits a reduced-size ConvNeXt at Hard difficulty when its core design is retained and explained. `modules_compact.py` defines an independent ConvNeXt variant using the existing custom blocks and channel normalization. It retains four stages and depths [3,3,9,3], and halves the widths to [48,96,192,384]. Depthwise 7x7 convolutions, fourfold channel expansion, GELU, Layer Scale, residual connections and downsampling remain in place. This is a reduced-width variant, not standard ConvNeXt-Tiny. It has 7,052,594 parameters, compared with 27,818,594 in the original custom model.
 
 The hypothesis is that lower capacity may improve validation performance given the observed training/validation gap. This is an experiment, not an established explanation or promised improvement. `train_convnext_local_compact.py` trains from fresh random initialization and preserves the fixed-LR control's patient split, original image dimensions, affine augmentation, seed 42, batch size 8, AdamW LR 3e-5, weight decay 0.05 and minimum-validation-loss checkpoint selection. No cosine schedule, stochastic depth or pretrained weights are added. Same seeds do not imply identical random draws or optimization trajectories across different architectures.
 
-Codex ran CPU synthetic checks at input shape [2,1,240,256]: syntax, stage depths/widths, forward/backward execution, finite gradients for every parameter, an optimizer update and evaluation confusion counts passed. These checks do not measure medical-data performance. GPU smoke and full training remain pending.
+Codex ran CPU synthetic checks at input shape [2,1,240,256]: syntax, stage depths/widths, forward/backward execution, finite gradients for every parameter, an optimizer update and evaluation confusion counts passed. These checks do not measure medical-data performance. The student subsequently completed GPU smoke and the 20-epoch run `local_convnext_compact_aug_lr3e5_20261026_004510_717473`. Minimum validation loss selected epoch 6: 0.5665020534500285, accuracy 68.7%, NC recall 68.1%, AD recall 69.3% (rounded log percentages). Epoch 18 reached 69.8% but was not selected under the fixed loss rule. Peak allocated memory was 620.4 MiB; the selected performance did not improve on the full-width local control. Epoch 20 training/validation accuracy was 80.8%/67.9%.
 
 From the project folder in PowerShell:
 
@@ -444,6 +444,43 @@ cat local_compact_20ep.log
 
 Each invocation creates a new run directory; smoke checks save no checkpoint. Full checkpoints retain the filename `best_convnext.pth` but record model `ConvNeXtCompact` in their configuration. Existing inference tools must be extended explicitly before loading these checkpoints; do not load them as ConvNeXtTiny. Compare the selected epoch against the local fixed-LR control (validation loss 0.561936, accuracy 70.0873%). Do not commit logs, model weights or runtime predictions. No test data are read by this trainer.
 
+## Matched initialization comparison (execution pending)
+
+Teaching-team correspondence supplied by the student allows official ImageNet weights to be loaded into a self-defined ConvNeXt when the source is cited and results are compared with training from scratch. Direct use of a prebuilt model as the submitted architecture remains disallowed. `modules.py` now defines `ConvNeXtTinyRGB`, extending the existing custom implementation with a three-channel stem; the original single-channel model remains unchanged.
+
+`dataset_rgb224.py` applies grayscale conversion, aspect-preserving bilinear resize with black padding to 224x224, training-only affine augmentation, RGB replication, and normalization with means [0.485,0.456,0.406] and standard deviations [0.229,0.224,0.225]. This is used identically in both arms, with deterministic validation preprocessing. RGB replication introduces no new MRI information. There is no center crop.
+
+`train_convnext_local_initialization.py` requires `--initialization scratch` or `--initialization imagenet`. Both arms use the same fixed patient manifests, seed 42, 20 epochs, batch size 8, AdamW LR 3e-5, weight decay 0.05, full precision, no stochastic depth and minimum validation-loss checkpoint selection. All layers are trainable. The ImageNet arm changes only the backbone initialization; the binary classifier is initialized identically. The previous single-channel experiments are historical context, not a matched initialization control.
+
+Official weight source: [torchvision ConvNeXt-Tiny IMAGENET1K_V1](https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.convnext_tiny.html); [weight file](https://download.pytorch.org/models/convnext_tiny-983f1562.pth). `imagenet_weight_mapping.py` uses the weight state dictionary without constructing a prebuilt training model. It checks full key coverage and shapes, maps 180 tensors, discards the two ImageNet head tensors and preserves the custom binary head. Download/hash verification uses the official filename hash prefix; the complete SHA256 is recorded in the run configuration. Cached files are checked as well. Default cache: `D:/codex/cache/torch/checkpoints`, outside the repository. No classmate checkpoint or training code is used.
+
+CPU verification uses random reference weights to check mapping, unchanged binary-head weights, output parity, finite gradients and deterministic RGB224 preprocessing. Official download/loading and GPU smoke must pass before a full run. Smoke runs process partial batches only and save no checkpoint. Never interpret their accuracy as performance. Model name `ConvNeXtTinyRGB` and preprocessing are recorded; existing single-channel inference scripts must be extended before evaluating these checkpoints.
+
+From the project directory in PowerShell, run these sequentially, checking each exit/output before proceeding:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u train_convnext_local_initialization.py --model convnext --initialization scratch --epochs 20 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_scratch_smoke.log
+cat rgb224_scratch_smoke.log
+& $py -u train_convnext_local_initialization.py --model convnext --initialization imagenet --epochs 20 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_imagenet_smoke.log
+cat rgb224_imagenet_smoke.log
+```
+
+The first ImageNet invocation downloads approximately 109 MiB of official weights if absent. After both smoke checks pass, run each full arm separately (no simultaneous training):
+
+```powershell
+& $py -u train_convnext_local_initialization.py --model convnext --initialization scratch --epochs 20 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_scratch_20ep.log
+cat rgb224_scratch_20ep.log
+& $py -u train_convnext_local_initialization.py --model convnext --initialization imagenet --epochs 20 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_imagenet_20ep.log
+cat rgb224_imagenet_20ep.log
+```
+
+Each invocation creates a separate run. Do not commit logs, weights or private runtime outputs. No test data are read. Report results as a single-seed comparison under this specific recipe; improvement is not guaranteed.
+
+### Split-protocol explanation
+
+The provided original training and test folders shared 216 patients. We pooled the available images and generated fixed diagnosis-stratified patient-level splits to avoid that overlap. Patients, scans and paths are disjoint across the new splits, and exact duplicate content checks passed. The new test set has not been used for model selection or tuning. Because the new validation set can include files from the original test folder, this protocol differs from the original folder protocol and results are not directly comparable. A tutor advised deriving validation from training data; the subsequent response requested reporting dataset problems and how they were handled, without explicitly approving or rejecting the pooled re-split. We disclose this distinction and retain the fixed protocol rather than changing partitions in response to performance.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
@@ -459,4 +496,7 @@ Each invocation creates a new run directory; smoke checks save no checkpoint. Fu
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
 The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files and full validation inference with exact loss reproduction on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. Further code understanding, review and empirical validation remain part of the student's responsibility. Update this disclosure as work progresses.
+
+
+Execution status: CPU mapping verification was attempted but interrupted while PyTorch import was unresponsive. No passing result is claimed. Run the synthetic diagnostic with: python check_imagenet_mapping.py before GPU smoke. This diagnostic alone instantiates a random torchvision reference; training does not. Official weights have not yet been downloaded.
 
