@@ -525,7 +525,7 @@ Weights are reused from the verified D:/codex cache. Separate run names include 
 
 ### Completed lower-LR results
 
-Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546877, validation accuracy 76.6%, NC recall 84.6% and AD recall 68.7%. Percentages are rounded log values; checkpoint inference and detailed metric reproduction remain pending. The run directory was not included in the supplied output and is not inferred here.
+Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546877, validation accuracy 76.6%, NC recall 84.6% and AD recall 68.7%. Percentages are rounded log values; checkpoint inference and detailed metric reproduction remain pending. Run identifier: `local_rgb224_lr3e6_imagenet_20261026_201343_178908`, subsequently supplied by the student and matched to the local configuration.
 
 | ImageNet fine-tuning LR | Comparison budget | Loss-selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
 |---|---|---:|---:|---:|---:|---:|
@@ -536,6 +536,20 @@ Under this single-seed, equal-five-epoch comparison, the lower LR improved selec
 
 The lower-LR run ended with train/validation accuracy of 97.1%/75.0% and validation loss 0.7955; continued fitting did not improve on epoch 3. Logged epoch times sum to 2568.7 seconds (about 42.8 minutes, excluding startup and checkpoint-writing overhead); peak allocated memory was 1204.5 MiB. This is the highest reported accuracy among our loss-selected ConvNeXt checkpoints so far, but it does not establish superiority across all metrics or seeds. The scratch RGB224 control still has lower selected validation loss (0.565854). No test evaluation has been performed. Next, reproduce the selected epoch-3 checkpoint's full validation metrics before another training change.
 
+
+## RGB224 checkpoint validation (pending execution)
+
+`evaluate_rgb224_validation.py` defaults to the lower-LR run `local_rgb224_lr3e6_imagenet_20261026_201343_178908`. It checks the checkpoint model, preprocessing configuration, train/validation manifest hashes and patient/scan/path separation. It verifies that the saved epoch matches the minimum validation-loss entry in the training log, then performs full validation inference using RGB224 preprocessing without augmentation and the recorded batch size.
+
+Outputs include accuracy, balanced accuracy, macro-F1, AD-positive AUROC, per-class metrics, confusion matrix, loss reproduction, and manifest/checkpoint hashes. Private row-index predictions are exported without patient IDs or image paths to `validation_rgb224_evaluation/` inside the run directory. Existing outputs are never overwritten. Loss mismatch beyond absolute tolerance 1e-6 or accuracy mismatch against the log raises an error after saving diagnostics. No test data are loaded and no weights are downloaded.
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u evaluate_rgb224_validation.py 2>&1 | Tee-Object -FilePath rgb224_lr3e6_validation.log
+cat rgb224_lr3e6_validation.log
+```
+
+Syntax has been checked; full GPU evaluation remains for the student to run. Do not commit runtime predictions or logs. The script reuses the existing classification metric functions in `predict.py` without running its CLI.
 
 ## Remaining work
 
