@@ -588,6 +588,30 @@ $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
 cat rgb224_confidence.log
 ```
 
+## Candidate failure cases and inference profiling
+
+`inspect_rgb224_candidate.py --mode failures` has been run by Codex on the saved validation export. It checks manifest identity and prediction consistency, then selects five distinct patients globally: the two highest-confidence AD-to-NC errors, two highest-confidence NC-to-AD errors, and the remaining incorrect prediction closest to p(AD)=0.5. The private figure displays grayscale images after the same deterministic 224x224 resize/padding as the model, before normalization. It uses the default classification threshold 0.50, not the exploratory threshold 0.21. The selection is purposive, not representative of overall error frequency.
+
+| Validation row | True / predicted | p(AD) | Interpretation |
+|---|---|---:|---|
+| 1524 | AD / NC | 0.002124 | High-confidence false negative; would remain wrong at 0.21 |
+| 3481 | AD / NC | 0.002849 | High-confidence false negative; would remain wrong at 0.21 |
+| 2777 | NC / AD | 0.999369 | High-confidence false positive; would remain wrong at 0.21 |
+| 4054 | NC / AD | 0.999212 | High-confidence false positive; would remain wrong at 0.21 |
+| 1407 | AD / NC | 0.499264 | Borderline false negative; would switch to AD at 0.21 |
+
+These examples show that moving a decision threshold can correct borderline mistakes while leaving extreme-confidence errors unchanged. They do not establish that image anatomy, labels or preprocessing caused the errors. The selected images are readable, but a visual sample cannot establish dataset-wide preprocessing consistency or a clinical diagnosis. Figure and selection metadata are saved under the run's ignored `validation_rgb224_failures/` directory. No raw MRI figure or patient identifiers are added to the public README by this script.
+
+GPU profiling is prepared but not yet executed. Run separately while no training is active:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u inspect_rgb224_candidate.py --mode profile 2>&1 | Tee-Object -FilePath rgb224_profile.log
+cat rgb224_profile.log
+```
+
+The script verifies the evaluated checkpoint hash and preprocessing, then profiles float32 inference at batch sizes 1 and 8, each with 10 warmup forwards and 50 synchronized timed forwards on GPU-resident inputs. It separately times a bounded pipeline over the first 256 validation images, including file loading, preprocessing, CPU-to-GPU transfer, forward pass, softmax and probability transfer to CPU. Model startup, metric computation and file export are excluded; OS file caching is uncontrolled. Batch-8 time divided by eight is amortized per-slice throughput cost, not single-request latency. Memory is peak PyTorch allocated memory, not total VRAM usage. Results will be saved under `validation_rgb224_profile/` without overwriting prior outputs. No test data are read. Syntax and CPU figure generation passed; GPU timing results remain pending.
+
 ## Remaining work
 
 - Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
