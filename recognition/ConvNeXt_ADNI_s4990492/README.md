@@ -602,7 +602,7 @@ cat rgb224_confidence.log
 
 These examples show that moving a decision threshold can correct borderline mistakes while leaving extreme-confidence errors unchanged. They do not establish that image anatomy, labels or preprocessing caused the errors. The selected images are readable, but a visual sample cannot establish dataset-wide preprocessing consistency or a clinical diagnosis. Figure and selection metadata are saved under the run's ignored `validation_rgb224_failures/` directory. No raw MRI figure or patient identifiers are added to the public README by this script.
 
-GPU profiling is prepared but not yet executed. Run separately while no training is active:
+The student completed GPU profiling. To reproduce in a fresh output location, run separately while no training is active (the script preserves existing outputs):
 
 ```powershell
 $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
@@ -610,7 +610,20 @@ $py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
 cat rgb224_profile.log
 ```
 
-The script verifies the evaluated checkpoint hash and preprocessing, then profiles float32 inference at batch sizes 1 and 8, each with 10 warmup forwards and 50 synchronized timed forwards on GPU-resident inputs. It separately times a bounded pipeline over the first 256 validation images, including file loading, preprocessing, CPU-to-GPU transfer, forward pass, softmax and probability transfer to CPU. Model startup, metric computation and file export are excluded; OS file caching is uncontrolled. Batch-8 time divided by eight is amortized per-slice throughput cost, not single-request latency. Memory is peak PyTorch allocated memory, not total VRAM usage. Results will be saved under `validation_rgb224_profile/` without overwriting prior outputs. No test data are read. Syntax and CPU figure generation passed; GPU timing results remain pending.
+The script verifies the evaluated checkpoint hash and preprocessing, then profiles float32 inference at batch sizes 1 and 8, each with 10 warmup forwards and 50 synchronized timed forwards on GPU-resident inputs. It separately times a bounded pipeline over the first 256 validation images, including file loading, preprocessing, CPU-to-GPU transfer, forward pass, softmax and probability transfer to CPU. Model startup, metric computation and file export are excluded; OS file caching is uncontrolled. Batch-8 time divided by eight is amortized per-slice throughput cost, not single-request latency. Memory is peak PyTorch allocated memory, not total VRAM usage. Results are saved under `validation_rgb224_profile/` without overwriting prior outputs. No test data are read. Syntax, CPU figure generation and the student-run GPU profile completed.
+
+### Measured inference resources
+
+The verified epoch-3 checkpoint (SHA256 `6b89086579452034b671dff60844f8416829bce60a6fb9a6c23609a877425cd5`) was profiled on an NVIDIA GeForce RTX 4050 Laptop GPU using PyTorch 2.11.0+cu128 and float32. It contains 27,821,666 parameters. Each forward-only setting used 10 warmup batches and 50 timed batches with CUDA synchronization.
+
+| Measurement | Batch size | Median batch time | Per-slice time | Peak allocated GPU memory |
+|---|---:|---:|---:|---:|
+| Forward only, GPU-resident inputs | 1 | 6.898 ms | 6.898 ms | 129.90 MiB |
+| Forward only, GPU-resident inputs | 8 | 24.377 ms | 3.047 ms (amortized) | 212.61 MiB |
+
+A separate bounded pipeline processed the first 256 validation images at batch size 8 in 1.2871001 seconds, averaging 5.027735 ms per slice (approximately 199 slices/second in this measurement). This includes image reading, RGB224 preprocessing, transfers, model forward, softmax and CPU probability copy, but excludes model loading, metric computation and file export. OS caching was uncontrolled. This is one local measurement, not a cold-start or deployment latency guarantee. Batch-8 amortized time is not single-image request latency; peak allocated memory is not total device memory.
+
+The measurements support execution feasibility on the available laptop GPU, while validation error rates, AD recall and uncalibrated high-confidence errors remain the principal model limitations. A matched local baseline profile is still needed before claiming a speed or resource advantage over the baseline.
 
 ## Remaining work
 
