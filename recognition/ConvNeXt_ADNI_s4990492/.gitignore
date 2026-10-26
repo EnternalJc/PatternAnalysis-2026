@@ -30,3 +30,4 @@ train_convnext_*.out
 train_convnext_*.err
 # Local datasets
 local_data/
+*.log

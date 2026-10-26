@@ -496,11 +496,46 @@ The ImageNet run's highest logged validation accuracy was 79.8% at epoch 4 (vali
 
 Peak allocated memory was approximately 1204.5 MiB in both arms. Epoch times varied substantially; the observations do not establish a controlled hardware speed comparison. Accuracy and cross-entropy can move in different directions because cross-entropy also depends on confidence. Per-slice probability inspection is needed before attributing the loss increase to particular high-confidence errors. This single-seed result is specific to the fixed split and recipe.
 
-A lower-learning-rate pretrained experiment has been proposed but has not been implemented or run as part of these results.
+The completed lower-learning-rate pretrained experiment is reported separately below.
 
 ### Split-protocol explanation
 
 The provided original training and test folders shared 216 patients. We pooled the available images and generated fixed diagnosis-stratified patient-level splits to avoid that overlap. Patients, scans and paths are disjoint across the new splits, and exact duplicate content checks passed. The new test set has not been used for model selection or tuning. Because the new validation set can include files from the original test folder, this protocol differs from the original folder protocol and results are not directly comparable. A tutor advised deriving validation from training data; the subsequent response requested reporting dataset problems and how they were handled, without explicitly approving or rejecting the pooled re-split. We disclose this distinction and retain the fixed protocol rather than changing partitions in response to performance.
+
+## Five-epoch lower-learning-rate fine-tuning
+
+`train_convnext_local_imagenet_lr3e6.py` starts fresh from the same official ImageNet weights and random binary head. It does not resume the previous trained checkpoint. The learning rate is reduced from 3e-5 to 3e-6; RGB224 preprocessing, custom architecture, fixed split, seed 42, batch size 8, AdamW weight decay 0.05, training augmentation and full-layer fine-tuning remain unchanged. The budget is five epochs to limit runtime. Compare against the first five epochs of the previous ImageNet run for an equal-budget comparison; comparison with its full ten-epoch trajectory has a different training budget. Both the first-five-epoch and ten-epoch minimum-loss selections in that previous run were epoch 1.
+
+The hypothesis is that smaller updates may improve validation loss and AD recall given the rapid training fit and validation deterioration in the earlier run. Improvement is not guaranteed. The selection rule remains minimum validation loss; a higher-accuracy epoch is not substituted retrospectively. Only validation guides this experiment; no test data are read. Syntax and the intended source differences were checked. The student subsequently completed the five-epoch GPU run; results follow.
+
+Run smoke first, then full training separately after SMOKE PASS:
+
+```powershell
+$py = "D:\Github\PatternAnalysis-2026\.venv\Scripts\python.exe"
+& $py -u train_convnext_local_imagenet_lr3e6.py --model convnext --epochs 5 --batch-size 8 --smoke 2>&1 | Tee-Object -FilePath rgb224_imagenet_lr3e6_smoke.log
+cat rgb224_imagenet_lr3e6_smoke.log
+```
+
+```powershell
+& $py -u train_convnext_local_imagenet_lr3e6.py --model convnext --epochs 5 --batch-size 8 2>&1 | Tee-Object -FilePath rgb224_imagenet_lr3e6_5ep.log
+cat rgb224_imagenet_lr3e6_5ep.log
+```
+
+Weights are reused from the verified D:/codex cache. Separate run names include `lr3e6`; old checkpoints are preserved. Smoke outputs are diagnostic only. Do not commit logs or runtime outputs.
+
+### Completed lower-LR results
+
+Student-supplied logs select epoch 3 by minimum validation loss: 0.6428447342546877, validation accuracy 76.6%, NC recall 84.6% and AD recall 68.7%. Percentages are rounded log values; checkpoint inference and detailed metric reproduction remain pending. The run directory was not included in the supplied output and is not inferred here.
+
+| ImageNet fine-tuning LR | Comparison budget | Loss-selected epoch | Validation loss | Validation accuracy | NC recall | AD recall |
+|---|---|---:|---:|---:|---:|---:|
+| 3e-5 | First 5 epochs of prior run | 1 | 0.6851202758443928 | 73.9% | 91.6% | 56.3% |
+| 3e-6 | 5 epochs | 3 | 0.6428447342546877 | 76.6% | 84.6% | 68.7% |
+
+Under this single-seed, equal-five-epoch comparison, the lower LR improved selected validation accuracy by about 2.7 percentage points and AD recall by about 12.4 points, while reducing NC recall by about 7.0 points. Validation loss decreased by approximately 0.04228. The prior run's first-five-epoch selection is also its full-ten-epoch selection. Its peak logged accuracy of 79.8% at epoch 4 remains an unselected trajectory observation, not an available loss-selected checkpoint.
+
+The lower-LR run ended with train/validation accuracy of 97.1%/75.0% and validation loss 0.7955; continued fitting did not improve on epoch 3. Logged epoch times sum to 2568.7 seconds (about 42.8 minutes, excluding startup and checkpoint-writing overhead); peak allocated memory was 1204.5 MiB. This is the highest reported accuracy among our loss-selected ConvNeXt checkpoints so far, but it does not establish superiority across all metrics or seeds. The scratch RGB224 control still has lower selected validation loss (0.565854). No test evaluation has been performed. Next, reproduce the selected epoch-3 checkpoint's full validation metrics before another training change.
+
 
 ## Remaining work
 
