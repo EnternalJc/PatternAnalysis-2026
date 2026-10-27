@@ -825,10 +825,29 @@ For this coursework's predictive-performance objective, the fixed ConvNeXt candi
 
 ![Measured resource comparison on the local laptop GPU](figures/final_resource_comparison.png)
 
+## Submission entry points and final prediction example
+
+The model definitions remain in `modules.py`. `dataset.py` now contains both the original grayscale loader and `RGB224Dataset`; `dataset_rgb224.py` preserves the historical import path. The RGB224 implementation was moved without changing its preprocessing or augmentation operations.
+
+`train.py` exposes explicit final-workflow subcommands while retaining the original command-line interface:
+
+| Command | Workflow |
+|---|---|
+| `train.py final-train --model convnext --epochs 5 --batch-size 8` | Reproduce the final ImageNet-initialized, AdamW 3e-6 training recipe in a new run |
+| `train.py rgb224-comparison --model convnext --initialization scratch --epochs 10 --batch-size 8` | Matched scratch recipe; use `imagenet` for the paired initialization experiment |
+| `train.py final-validate --run RUN_DIRECTORY` | Full RGB224 validation through the existing verified evaluator |
+| `train.py final-test` | Frozen-protocol test evaluator; refuses to overwrite the completed result directory |
+| `predict.py example --device cpu` | One validation-slice prediction and input/output visualization from the frozen final checkpoint |
+
+These are reproduction interfaces, not instructions to resume model selection after test evaluation. Existing evaluation outputs are preserved. Historical scripts remain available and final workflows delegate to their documented implementations. Training and held-out testing are separate explicit commands so training never automatically exposes test performance.
+
+Run from `recognition/ConvNeXt_ADNI_s4990492` using the repository virtual environment. The final example defaults to validation row 0 and writes `prediction.json` and `prediction.png` under the private `runs/final_prediction_example/` directory. It verifies the checkpoint and validation-manifest hashes, applies the training-time deterministic RGB224 preprocessing, and uses the predefined threshold 0.50. Its uncalibrated probability and single prediction are not an accuracy estimate. Use `--row` to select a different validation example and `--output` to choose a new output directory; existing output is never overwritten. Keep MRI example images private unless the submission channel permits the supplied dataset images.
+
+
 ## Remaining work
 
 - Consolidate the experimental narrative, environment details, confidence analysis and five validation failure examples into the submission report.
-- Verify that the required `modules.py`, `dataset.py`, `train.py` and `predict.py` entry points expose the final documented workflow, including an input/output example.
+- Complete the final report layout and review the documented canonical entry points and private prediction example.
 - Keep the completed test results, model checkpoints and operating rules fixed.
 - Export and visually inspect the final README PDF; check references, AI disclosure and submission contents.
 - Submit through Turnitin and prepare the required upstream PR using GitHub Desktop; retain meaningful source/documentation commits without data or weights.

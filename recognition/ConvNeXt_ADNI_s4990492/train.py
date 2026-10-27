@@ -239,5 +239,22 @@ def main():
     print("Finished. Best validation loss:", best_val_loss, flush=True)
 
 
+def dispatch():
+    """Expose final workflows while preserving historical CLI behavior."""
+    import sys
+    routes = {
+        'final-train': 'train_convnext_local_imagenet_lr3e6',
+        'rgb224-comparison': 'train_convnext_local_initialization',
+        'final-validate': 'evaluate_rgb224_validation',
+        'final-test': 'evaluate_rgb224_test',
+    }
+    if len(sys.argv) > 1 and sys.argv[1] in routes:
+        import importlib
+        module_name = routes[sys.argv.pop(1)]
+        importlib.import_module(module_name).main()
+    else:
+        main()
+
+
 if __name__ == "__main__":
-    main()
+    dispatch()
