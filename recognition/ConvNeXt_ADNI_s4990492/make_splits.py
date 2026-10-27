@@ -1,6 +1,6 @@
 import csv
 import json
-import random
+from dataset import split_patient_rows
 from collections import Counter
 from pathlib import Path
 
@@ -23,32 +23,7 @@ for row in rows:
         raise ValueError("Patient has conflicting classes")
     patient_class[patient] = label
 
-rng = random.Random(SEED)
-assignment = {}
-
-for label in ("AD", "NC"):
-    patients = sorted(
-        patient for patient, group in patient_class.items()
-        if group == label
-    )
-    rng.shuffle(patients)
-
-    n_train = int(len(patients) * 0.70)
-    n_val = int(len(patients) * 0.15)
-
-    groups = {
-        "train": patients[:n_train],
-        "val": patients[n_train:n_train + n_val],
-        "test": patients[n_train + n_val:],
-    }
-
-    for split, members in groups.items():
-        for patient in members:
-            assignment[patient] = split
-
-split_rows = {name: [] for name in ("train", "val", "test")}
-for row in rows:
-    split_rows[assignment[row["patient_id"]]].append(row)
+split_rows = split_patient_rows(rows, seed=SEED)
 
 # Verify that no patient appears in more than one split.
 patient_sets = {

@@ -11,6 +11,38 @@ from torch.utils.data import Dataset
 from torchvision.transforms import functional as TF
 
 
+def split_patient_rows(rows, seed=42):
+    """Return the original stratified 70/15/remainder patient split in memory.
+
+    This function never writes manifests. Reuse frozen manifests for evaluation.
+    Sorted patient IDs and a local RNG preserve the historical assignment rule.
+    """
+    import random
+    patient_class = {}
+    for row in rows:
+        patient, label = row['patient_id'], row['class_name']
+        if label not in ('AD', 'NC'):
+            raise ValueError('Unknown class: ' + label)
+        if patient in patient_class and patient_class[patient] != label:
+            raise ValueError('Patient has conflicting classes')
+        patient_class[patient] = label
+    rng = random.Random(seed)
+    assignment = {}
+    for label in ('AD', 'NC'):
+        patients = sorted(p for p, c in patient_class.items() if c == label)
+        rng.shuffle(patients)
+        n_train, n_val = int(len(patients)*0.70), int(len(patients)*0.15)
+        groups = {'train': patients[:n_train],
+                  'val': patients[n_train:n_train+n_val],
+                  'test': patients[n_train+n_val:]}
+        for name, members in groups.items():
+            assignment.update({patient: name for patient in members})
+    result = {name: [] for name in ('train', 'val', 'test')}
+    for row in rows:
+        result[assignment[row['patient_id']]].append(row)
+    return result
+
+
 class ADNISliceDataset(Dataset):
     """Return a grayscale image tensor and its binary class label."""
 
