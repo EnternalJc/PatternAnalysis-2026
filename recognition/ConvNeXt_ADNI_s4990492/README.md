@@ -2,13 +2,13 @@
 
 ## Project status
 
-Updated 24 October 2026. Both the CNN baseline and a single-channel ConvNeXt-Tiny have completed three-epoch pilots and separate twenty-epoch runs on Rangpur. Results below are slice-level validation results reported by the student from cluster logs, not final test results. The existing patient-level split is retained following the leakage audit on 22 October 2026. Check-off completion has not yet been recorded here.
+Updated 27 October 2026. Training, validation analysis, fixed-checkpoint held-out evaluation and local resource profiling are complete. The final custom ConvNeXt with ImageNet initialization achieved 81.7686% slice-level test accuracy; the SimpleCNN baseline achieved 71.1572% on the same patient-disjoint test split. These results use the disclosed replacement split, not the original folder split. Check-off was completed on 20 October 2026, as confirmed by the student; the historical review and tutor feedback are recorded below. Report and submission packaging remain in progress.
 
 ## Objective and model principles
 
 Classify Alzheimer's disease (AD) versus normal control (NC, called CN in the assignment) MRI slices, and investigate whether prediction confidence can identify errors for human review. Compare classification performance, confidence reliability and computational cost.
 
-The baseline uses three convolution/ReLU/pooling blocks, global average pooling and a two-class linear head (23,426 parameters). ConvNeXt-Tiny uses depthwise spatial convolution, LayerNorm, channel expansion/projection, GELU and residual connections. Stage depths are [3, 3, 9, 3] and widths [96, 192, 384, 768]. The implementation adapts the input to one grayscale channel and the output to two classes (27,818,594 parameters). The self-implemented models use no pretrained weights or stochastic depth. Architecture source: [Liu et al., A ConvNet for the 2020s, CVPR 2022](https://arxiv.org/abs/2201.03545) and [author implementation](https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py).
+The baseline uses three convolution/ReLU/pooling blocks, global average pooling and a two-class linear head (23,426 parameters). ConvNeXt-Tiny uses depthwise spatial convolution, LayerNorm, channel expansion/projection, GELU and residual connections. Stage depths are [3, 3, 9, 3] and widths [96, 192, 384, 768]. The implementation adapts the input to one grayscale channel and the output to two classes (27,818,594 parameters). These initial models were trained from scratch without stochastic depth. Later controlled experiments added stochastic depth, a smaller model, RGB224 preprocessing and ImageNet initialization. The final custom three-channel ConvNeXt contains 27,821,666 parameters and is fine-tuned from mapped official ImageNet weights; its architecture remains defined in `modules.py`. Architecture source: [Liu et al., A ConvNet for the 2020s, CVPR 2022](https://arxiv.org/abs/2201.03545) and [author implementation](https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py).
 
 ## Data audit and preprocessing
 
@@ -22,7 +22,7 @@ The supplied training/test directories share 216 subjects despite having no comm
 | Validation | 101 | 229 | 4,580 |
 | Test | 104 | 229 | 4,580 |
 
-Subject overlap is zero. Source images are not moved. The loader converts images to grayscale float32 tensors in [0,1], retaining dimensions; sampled inputs were [1,240,256], and both pilot runs completed with batching at this size. The original runs used no augmentation; subsequent experiments apply training-only affine augmentation as described below. Different numbers of scans per subject remain an evaluation/weighting consideration. The test split has not been used for model selection or performance evaluation.
+Subject overlap is zero. Source images are not moved. The loader converts images to grayscale float32 tensors in [0,1], retaining dimensions; sampled inputs were [1,240,256], and both pilot runs completed with batching at this size. The original runs used no augmentation; subsequent experiments apply training-only affine augmentation as described below. Different numbers of scans per subject remain an evaluation/weighting consideration. The test split was held out during model and threshold selection. Final evaluation has now completed with fixed checkpoints and predefined thresholds; its results are not used for further tuning.
 
 ### Leakage audit completed on 22 October 2026
 
@@ -92,7 +92,7 @@ Baseline epoch 3 AD/NC recall: 75.2%/57.9%. ConvNeXt best-validation-loss epoch 
 | SimpleCNN | 29.3-35.0 s | 124.2 MiB |
 | ConvNeXt-Tiny | 132.2-136.8 s | 1,405.7 MiB |
 
-Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency has not been separately measured. Baseline checkpoint reload and single-image inference passed; Both selected twenty-epoch checkpoints subsequently passed strict model loading and full validation inference, as documented below.
+Times exclude startup and checkpoint writing. Allocated tensor memory is not total GPU process usage. Inference latency was not measured in these pilots; completed local profiling is reported below. Baseline checkpoint reload and single-image inference passed; Both selected twenty-epoch checkpoints subsequently passed strict model loading and full validation inference, as documented below.
 
 Baseline run: `baseline_20261018_191208_445054`. ConvNeXt pilot run: `convnext_20261019_190724_687263` (job `675518`). The twenty-epoch learning curves are described below.
 
@@ -137,7 +137,68 @@ The plot reads saved metrics only; it does not load images or evaluate a model. 
 
 ## Feasibility review
 
-The current one-page bilingual review and speaking notes are maintained locally under `D:/codex/作业/COMP3710_Pattern_Recognition/Tutor_Checkoff`. That local path is not a repository artifact. Incorporate the English feasibility review as a clearly identified section of the final README, together with confirmed tutor feedback/check-off status. The audited patient-level split is retained. Teaching-team clarification confirms that the 0.80 test-accuracy target is evaluated at slice level.
+### Historical one-page review presented at check-off
+
+**COMP3710 | s4990492 | 20 October 2026.** The following content is transcribed from the student's one-page English feasibility review, with its split table reformatted. Statements about proposed work, approval requests, budgets and unmeasured test performance describe the plan at that time, not the final project status.
+
+#### 1. User need, scope and acceptance criteria
+Build an ADNI MRI classification prototype for research reviewers: compare ConvNeXt with a simple CNN and investigate
+whether confidence identifies errors well enough to refer uncertain cases for human review.
+Acceptance targets: (1) Zero patient overlap across splits. (2) Test accuracy at least 0.80 (course target), with per-class
+precision/recall, macro-F1 and AUROC. (3) Compare calibration and error-versus-coverage curves; select referral
+thresholds on validation data only. (4) Fit a real-data training batch on one A100 40GB and measure peak allocated
+memory, parameters and inference latency. (5) Explain 3-5 failure cases and the benefit/cost of the advanced model.
+Targets are prospective; test performance is not yet measured.
+
+#### 2. Model choice and course concepts
+Main model: ConvNeXt-Tiny (Hard proposal), with stage depths [3, 3, 9, 3] and widths [96, 192, 384, 768], a one-channel
+input stem and two-class head. Implement and explain the architecture in PyTorch, citing [1]; initially train from scratch.
+Core concepts are convolution, residual learning, normalization and backpropagation. The initial plan uses no pretrained
+weights.
+Baseline: a three-block CNN with global average pooling (23,426 parameters). Initially use the same native 240 x 256
+grayscale tensors in [0,1], split manifests and evaluation protocol for both models. Select checkpoints by validation loss.
+Propose slice-level metrics plus patient-level metrics from equally weighted scan averages; confirm the required unit for the
+0.80 target. Keep the test split untouched during model selection.
+
+#### 3. Preliminary feasibility evidence
+Data: 30,520 images from 680 subjects (221 AD, 459 NC); all images matched metadata and subject IDs, with no subjects
+in both classes. The provided train/test folders share 216 subjects despite having no shared scan IDs. Provisional
+class-stratified patient splits (seed 42) eliminate this overlap; approval is requested.
+
+| Provisional split | Subjects | Scans | Images |
+|---|---:|---:|---:|
+| Training | 475 | 1,068 | 21,360 |
+| Validation | 101 | 229 | 4,580 |
+| Test | 104 | 229 | 4,580 |
+
+Baseline evidence: on A100 40GB, three epochs reduced validation loss from 0.6633 to 0.6136 and raised slice-level
+validation accuracy from 60.4% to 66.6%. Final AD/NC recall: 75.2%/57.9%. Train-plus-validation time: 29-35 s/epoch;
+peak PyTorch-allocated memory: 124.2 MiB (not total GPU usage). Checkpoint reload and inference passed. ConvNeXt
+pilot: 27,818,594 parameters; three epochs on the same split reached best validation accuracy 58.4% and loss 0.6733 at
+epoch 1. Training accuracy rose 52.3% to 72.5%, but validation loss rose to 0.8257, suggesting overfitting or optimization
+instability. Runtime: 132-137 s/epoch; peak allocated memory: 1,405.7 MiB. The baseline currently performs better;
+optimizer settings differ, so this is a preliminary comparison, not an isolated architecture effect.
+
+#### 4. Risks, budget and fallback
+Risks: repeated scans can overweight some patients; limited independent subjects can cause overfitting and unreliable
+confidence. Report patient-level results, monitor validation loss, and evaluate calibration on validation data. The
+replacement patient-level split requires tutor confirmation.
+Budget and next experiment: one A100; the three-epoch pilot used about 6.7 minutes for training and validation
+(excluding startup/checkpointing). Reserve up to 1 GPU-hour for a controlled follow-up after consultation: examine
+validation errors, then test learning-rate or regularization changes one at a time, retaining the best validation checkpoint.
+Keep the test set untouched. Reduce batch size if memory becomes limiting; any architecture/topic fallback will be
+discussed with the tutor.
+[1] Liu et al., A ConvNet for the 2020s, CVPR 2022. arxiv.org/abs/2201.03545. Evidence: student-run Rangpur audit and training logs;
+baseline run 20261018_191208_445054.
+
+### Tutor feedback and subsequent decisions
+
+The student confirmed completion of check-off on 20 October 2026 and recalled one recommendation: construct the validation set from the training data. No additional feedback or explicit approval of the replacement split is recorded.
+
+The implemented protocol pools the original directories and then partitions by patient, because 216 patients occur in both original folders. This differs from constructing validation solely from the original training folder. The fixed split and its zero-overlap audit are disclosed above. Check-off completion is not evidence that the tutor explicitly approved this replacement protocol; results must be interpreted under the stated split.
+
+Subsequent teaching clarification established slice-level accuracy as the required measure. Patient-level aggregation was therefore deferred rather than substituted for the primary metric. The project expanded beyond the initial one-hour follow-up proposal: augmentation, learning-rate, stochastic-depth, cosine-schedule, reduced-width and matched initialization experiments were completed. The final ImageNet-initialized model uses the student's architecture and is supported by a matched scratch comparison and source attribution. Final evaluation and laptop profiling replace the prospective measurements in the historical review. These later decisions are documented separately so the original check-off proposal remains identifiable.
+
 
 ## Training-only affine augmentation results
 
@@ -720,6 +781,14 @@ This is a comparison of complete prediction pipelines, not an isolated architect
 
 The baseline test artifacts are saved privately under `runs/baseline_20261022_211305_056381/final_baseline_evaluation/`. Its retrieved checkpoint SHA256 is `593339ff8dd1dc992c55db6412611531bd347d3b30c04f76bf395d4f99a94e93`. Local baseline timing and memory profiling are completed in the resource comparison below.
 
+### Final test visualizations
+
+![Final test confusion matrices at the predefined primary threshold](figures/final_test_confusion.png)
+
+![Final test ROC curves for the fixed checkpoints](figures/final_test_roc.png)
+
+`plot_final_results.py` renders these aggregate figures from saved predictions and metrics, checking matched test-row identities, confusion-matrix totals and reproduced AUROC. It does not run inference or select models.
+
 ## Baseline resource profiling: completed
 
 `profile_baseline.py` verifies the retrieved epoch-9 checkpoint hash and validation manifest against the completed baseline evaluation. It uses the same timing procedure as `inspect_rgb224_candidate.py --mode profile`: float32 on the local GPU, batch sizes 1 and 8, 10 warmup batches, 50 synchronized forward measurements, and a separate 256-image validation pipeline measurement at batch size 8. The baseline retains its original-size single-channel [0,1] preprocessing. No test images are used and no parameters are updated.
@@ -754,21 +823,21 @@ The baseline is substantially smaller and faster in these measurements. ConvNeXt
 
 For this coursework's predictive-performance objective, the fixed ConvNeXt candidate is the stronger tested pipeline and exceeds the numerical 80% slice-accuracy target under the disclosed re-split protocol. The SimpleCNN remains a useful low-resource reference. Neither pipeline is established as suitable for autonomous clinical diagnosis: the primary ConvNeXt still misses 455 AD test slices, probabilities are uncalibrated, and no external validation is available. Any proposed human-review workflow must report coverage and residual errors rather than substitute selective accuracy for full-set accuracy.
 
+![Measured resource comparison on the local laptop GPU](figures/final_resource_comparison.png)
+
 ## Remaining work
 
-- Confirm recorded check-off completion; retain the audited patient split and use slice-level test accuracy.
-- Prioritize slice-level confidence analysis for the self-implemented models; defer patient aggregation. The unused prebuilt-model experiment scripts have been removed.
-- Extend the validated inference pipeline with private per-sample prediction export, final evaluation and visualizations.
-- Main-model and baseline held-out evaluation and local profiling are complete; keep models and operating rules fixed and finish report integration.
-- Integrate completed validation confidence/referral analysis, five failure examples and measured inference resources into the final report.
-- Inspect and include the generated training plot; add feasibility-review content, complete environment details and final engineering recommendation.
-- Export the completed README to PDF for Turnitin; submit a working upstream PR and respond to later code review.
+- Consolidate the experimental narrative, environment details, confidence analysis and five validation failure examples into the submission report.
+- Verify that the required `modules.py`, `dataset.py`, `train.py` and `predict.py` entry points expose the final documented workflow, including an input/output example.
+- Keep the completed test results, model checkpoints and operating rules fixed.
+- Export and visually inspect the final README PDF; check references, AI disclosure and submission contents.
+- Submit through Turnitin and prepare the required upstream PR using GitHub Desktop; retain meaningful source/documentation commits without data or weights.
 
 ## Artificial Intelligence Usage Disclosure
 
 ChatGPT/Codex assisted with project planning, explanation of concepts, drafting and revising audit/split/data-loader/model/training/check scripts, Slurm troubleshooting, interpretation of supplied outputs, learning-curve plotting, and feasibility-review/README drafting. The ConvNeXt architecture was referenced from the paper and author implementation linked above.
 
-The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files and full validation inference with exact loss reproduction on Rangpur. These checks provide the reported evidence; they do not validate all implementation details, clinical use, calibration or final test performance. The student also completed the local stochastic-depth, cosine-schedule and reduced-width comparisons, synthetic ImageNet mapping verification, both RGB224 GPU smoke checks, and the matched 10-epoch scratch/ImageNet runs. Codex assisted with their implementation and documentation. Further code understanding, review and empirical validation remain part of the student's responsibility.
+The student ran the data and split audits, CPU model checks, GPU training smoke tests, a fixed-batch learning check, both three-epoch train/validation pilots, both original twenty-epoch runs, the twenty-epoch affine-augmentation run, the lower-learning-rate augmentation run, baseline checkpoint inference and CPU deserialization of both selected checkpoint files and full validation inference with exact loss reproduction on Rangpur. These historical checks support the corresponding experiment records. The student subsequently completed fixed-checkpoint test evaluations and local profiling for both final pipelines, as reported above. Clinical use and calibrated probabilities are not established by these experiments. The student also completed the local stochastic-depth, cosine-schedule and reduced-width comparisons, synthetic ImageNet mapping verification, both RGB224 GPU smoke checks, and the matched 10-epoch scratch/ImageNet runs. Codex assisted with their implementation and documentation. Further code understanding, review and empirical validation remain part of the student's responsibility.
 
 
 
