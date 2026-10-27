@@ -124,9 +124,13 @@ Five validation failures were selected from distinct patients: two most-confiden
 | 4054 | NC / AD | 0.999212 | Repeated false-positive pattern across patients; review remains necessary |
 | 1407 | AD / NC | 0.499264 | Boundary-sensitive error; switching to 0.21 changes this decision |
 
-The first four cases demonstrate confident errors that persist under both thresholds; the fifth shows an operating-point effect. Limited independent patient diversity, slice-level ambiguity and overfitting are possible contributors, supported by the training/validation gap, but these examples do not identify their individual causes. No diagnostic conclusion is drawn from anatomy alone. Private case images and selection metadata are available under the final run's `validation_rgb224_failures/` directory; no patient images are published in the repository report.
+The first four cases demonstrate confident errors that persist under both thresholds; the fifth shows an operating-point effect. Limited independent patient diversity, slice-level ambiguity and overfitting are possible contributors, supported by the training/validation gap, but these examples do not identify their individual causes. No diagnostic conclusion is drawn from anatomy alone. The following report figure shows the five selected validation cases. It contains model outputs and manifest row numbers, without patient IDs or file paths. Full selection metadata remain in the private run directory.
 
-The verified prediction example uses validation row 0: true AD, predicted AD, P(AD)=0.998354 at threshold 0.50. It displays the actual normalized input after undoing normalization for viewing. It is a software input/output demonstration, not additional accuracy evidence. The private figure is `runs/final_prediction_example_verified/prediction.png`.
+![Five distinct-patient validation failure cases at the predefined threshold 0.50](figures/validation_failure_examples.png)
+
+The verified prediction example uses validation row 0: true AD, predicted AD, P(AD)=0.998354 at threshold 0.50. It displays the actual normalized input after undoing normalization for viewing. It is a software input/output demonstration, not additional accuracy evidence. The following report figure shows the input and predicted output.
+
+![Validation input/output example: true AD, predicted AD; probability is uncalibrated](figures/prediction_example.png)
 
 ## 6. Resource costs and recommendation
 
@@ -182,7 +186,7 @@ The model definitions remain in `modules.py`. `dataset.py` now contains both the
 
 These are reproduction interfaces, not instructions to resume model selection after test evaluation. Existing evaluation outputs are preserved. Historical scripts remain available and final workflows delegate to their documented implementations. Training and held-out testing are separate explicit commands so training never automatically exposes test performance.
 
-Run from `recognition/ConvNeXt_ADNI_s4990492` using the repository virtual environment. The final example defaults to validation row 0 and writes `prediction.json` and `prediction.png` under the private `runs/final_prediction_example/` directory. It verifies the checkpoint and validation-manifest hashes, applies the training-time deterministic RGB224 preprocessing, and uses the predefined threshold 0.50. Its uncalibrated probability and single prediction are not an accuracy estimate. Use `--row` to select a different validation example and `--output` to choose a new output directory; existing output is never overwritten. Keep MRI example images private unless the submission channel permits the supplied dataset images.
+Run from `recognition/ConvNeXt_ADNI_s4990492` using the repository virtual environment. The final example defaults to validation row 0 and writes `prediction.json` and `prediction.png` under the private `runs/final_prediction_example/` directory. It verifies the checkpoint and validation-manifest hashes, applies the training-time deterministic RGB224 preprocessing, and uses the predefined threshold 0.50. Its uncalibrated probability and single prediction are not an accuracy estimate. Use `--row` to select a different validation example and `--output` to choose a new output directory; existing output is never overwritten. Only the selected report visualizations are included under figures; the dataset, full prediction exports and model weights remain excluded.
 
 ## 8. Original feasibility review and follow-up
 
